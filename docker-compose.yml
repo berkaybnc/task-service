@@ -1,0 +1,8 @@
+services:
+  task-service:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - JWT_SECRET=change_me_in_compose
