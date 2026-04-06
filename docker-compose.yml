@@ -1,8 +1,40 @@
 services:
-  task-service:
-    build: .
-    ports:
-      - "8080:8080"
+  auth-service:
+    build: ./auth-service
     environment:
-      - PORT=8080
-      - JWT_SECRET=change_me_in_compose
+      PORT: 3001
+      JWT_SECRET: ${JWT_SECRET:-homework_secret}
+    expose:
+      - "3001"
+
+  notification-service:
+    build: ./notification-service
+    environment:
+      PORT: 3003
+    expose:
+      - "3003"
+
+  task-service:
+    build: ./task-service
+    environment:
+      PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:-homework_secret}
+      NOTIFICATION_SERVICE_URL: http://notification-service:3003
+    depends_on:
+      - notification-service
+    expose:
+      - "8080"
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      AUTH_SERVICE_URL: http://auth-service:3001
+      TASK_SERVICE_URL: http://task-service:8080
+      NOTIFICATION_SERVICE_URL: http://notification-service:3003
+    depends_on:
+      - auth-service
+      - task-service
+      - notification-service
