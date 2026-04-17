@@ -1,6 +1,7 @@
 import pino from "pino";
 
 export const logger = pino({
-  level: "info",
-  redact: ["req.headers.authorization"]
+  level: process.env.LOG_LEVEL || "info",
+  base: { service: "task-service" },
+  redact: ["req.headers.authorization"],
 });

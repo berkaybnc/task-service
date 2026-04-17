@@ -11,11 +11,13 @@ import { taskRoutes } from "./src/api/routes/taskRoutes.js";
 import { logger } from "./src/infrastructure/logger/logger.js";
 import { errorHandler } from "./src/api/middlewares/errorHandler.js";
 import { env } from "./src/config/env.js";
+import { metricsMiddleware, metricsHandler } from "./src/infrastructure/metrics.js";
 
 const app = express();
 
 /* ---------- MIDDLEWARES ---------- */
 app.use(express.json());
+app.use(metricsMiddleware());
 app.use(pinoHttp({ logger }));
 
 /* ---------- SWAGGER ---------- */
@@ -26,12 +28,20 @@ const openapiDoc = YAML.parse(openapiYaml);
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapiDoc));
 
 /* ---------- ROUTES ---------- */
+app.get("/metrics", (req, res, next) => {
+  metricsHandler(req, res).catch(next);
+});
+
 app.get("/", (req, res) => {
   res.send("Task Service is running. Try /health, /docs, /tasks");
 });
 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    service: "task-service",
+    time: new Date().toISOString(),
+  });
 });
 
 app.use("/tasks", taskRoutes);
@@ -48,6 +58,6 @@ const isMain =
 
 if (isMain) {
   app.listen(env.PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${env.PORT}`);
+    logger.info({ port: env.PORT }, "Task Service listening");
   });
 }

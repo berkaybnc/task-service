@@ -24,12 +24,16 @@ jobs:
 
       - name: Install and test (auth-service)
         working-directory: auth-service
+        env:
+          JWT_SECRET: test_jwt_ci
         run: |
           npm ci
           npm test
 
       - name: Install and test (task-service)
         working-directory: task-service
+        env:
+          JWT_SECRET: test_jwt_ci
         run: |
           npm ci
           npm test

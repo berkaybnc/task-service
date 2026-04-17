@@ -2,24 +2,34 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
+const logger = require("./logger");
+const { metricsMiddleware, metricsHandler } = require("./metrics");
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(metricsMiddleware());
+
+app.use((req, res, next) => {
+  logger.info({ method: req.method, url: req.url }, "request");
+  next();
+});
 
 const PORT = process.env.PORT || 3003;
 
-// In-memory notifications
 const notifications = [];
 
-// Health check
+app.get("/metrics", (req, res, next) => {
+  metricsHandler(req, res).catch(next);
+});
+
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
-    service: "notification-service"
+    service: "notification-service",
   });
 });
 
-// Create notification
 app.post("/notifications", (req, res) => {
   const { message, taskId, taskTitle, createdBy } = req.body;
 
@@ -29,22 +39,21 @@ app.post("/notifications", (req, res) => {
     taskId: taskId || null,
     taskTitle: taskTitle || null,
     createdBy: createdBy || null,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   };
 
   notifications.push(notification);
 
   return res.status(201).json({
     status: "Notification stored",
-    notification
+    notification,
   });
 });
 
-// Get all notifications
 app.get("/notifications", (req, res) => {
   res.status(200).json({
     count: notifications.length,
-    notifications
+    notifications,
   });
 });
 
@@ -52,6 +61,6 @@ module.exports = app;
 
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`Notification Service running on port ${PORT}`);
+    logger.info({ port: PORT }, "Notification Service listening");
   });
 }

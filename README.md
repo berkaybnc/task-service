@@ -22,6 +22,16 @@ The system is composed of four independent services:
 
 Each service runs independently and communicates using REST APIs.
 
+## Homework coverage (HW#1–HW#5)
+
+| Assignment | What this repository demonstrates |
+|--------------|-----------------------------------|
+| **HW#1** | Four **microservices**, each with its own Express app, port, and **core functionality**; task-service uses a small **layered structure** (domain, API, infrastructure). |
+| **HW#2** | **API Gateway** pattern, **REST** service-to-service calls, **JWT** authentication, **protected** task routes, notification triggered when a task is created. |
+| **HW#3** | **Docker Compose** deployment, **Dockerfiles**, **GitHub Actions** CI/CD (`npm ci`, `npm test`, `docker compose build`), **environment** configuration via `.env.example` files. |
+| **HW#4** | **Structured logging** (pino + `service` field), **`/metrics`** (Prometheus format), **Prometheus** and **Grafana**, Docker **healthchecks**, **axios-retry** on outbound HTTP. |
+| **HW#5** | **bcrypt** password hashing, **JWT_SECRET** from the environment, **rate limiting** on the gateway, **AI summarization** endpoint (OpenAI when configured, otherwise mock), secrets via env / Compose. |
+
 ---
 
 ## HW#3 – Deployment (Docker Compose & CI/CD)
@@ -37,10 +47,13 @@ Each service reads environment variables (see `.env.example` in that service’s
 | `AUTH_SERVICE_URL` | Base URL of the auth service (used by **api-gateway**) |
 | `TASK_SERVICE_URL` | Base URL of the task service (used by **api-gateway**) |
 | `NOTIFICATION_SERVICE_URL` | Base URL of the notification service (**api-gateway** and **task-service**) |
+| `OPENAI_API_KEY` | Optional; **api-gateway** `POST /ai/summarize` uses OpenAI when set, otherwise a mock summary |
+| `LOG_LEVEL` | Optional **pino** log level (default `info`) |
+| `GRAFANA_ADMIN_PASSWORD` | Optional Grafana admin password (Compose default `admin`) |
 
-Copy `.env.example` to `.env` where you need custom values.
+Copy each service’s `.env.example` to `.env` when running locally. For **auth-service** and **task-service**, `JWT_SECRET` is **required** (no in-code default).
 
-Optional: add a `.env` file in the **repository root** with `JWT_SECRET=your_value` to override the default secret used by Docker Compose for **auth-service** and **task-service** (see `docker-compose.yml`).
+Optional: add a **repository root** `.env` (see root `.env.example`) with `JWT_SECRET`, `OPENAI_API_KEY`, or `GRAFANA_ADMIN_PASSWORD` for Docker Compose substitution.
 
 ### Run the full stack with Docker Compose
 
@@ -57,13 +70,14 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-Only the **API Gateway** is published to the host on port **3000**. Internal services talk over the Compose network using service names (for example `http://auth-service:3001`). Docker Desktop (or another Docker engine) must be running for `docker compose` commands to work.
+**Host ports:** **3000** (API Gateway), **9090** (Prometheus), **3005** (Grafana). Other services are reachable only inside the Compose network (for example `http://auth-service:3001`). Docker Desktop (or another Docker engine) must be running for `docker compose` commands to work.
 
 Example after the stack is up:
 
 ```http
 GET http://localhost:3000/health
 POST http://localhost:3000/auth/login
+POST http://localhost:3000/ai/summarize
 ```
 
 ### Run automated tests
@@ -93,6 +107,31 @@ On every push or pull request to `main` / `master` it:
 4. After tests pass, runs **`docker compose build`** to verify all images build
 
 You need a GitHub repository with Actions enabled for this to run on push.
+
+---
+
+## HW#4 – Observability & reliability
+
+- **Structured logging:** Every service logs with **pino** JSON lines that include a `service` field (visible with `docker compose logs`).
+- **Metrics:** Each service exposes **`GET /metrics`** (**prom-client**) with `http_requests_total` and `http_request_duration_seconds` (plus default Node metrics).
+- **Monitoring stack:** **Prometheus** (`monitoring/prometheus.yml`) scrapes all four app services; **Grafana** is provisioned with a default Prometheus datasource.
+- **Health:** Compose **healthchecks** call each service’s existing **`GET /health`** (images include `wget`).
+- **Retries:** Outbound **axios** calls from **api-gateway** and from **task-service** → notification use **axios-retry** (2 retries, exponential backoff; includes retry on 5xx responses).
+
+**Quick checks**
+
+- Prometheus UI: [http://localhost:9090](http://localhost:9090) → Status → Targets (all four jobs should be **UP** after a short wait).
+- Grafana: [http://localhost:3005](http://localhost:3005) — login **`admin` / `admin`** (or the password from `GRAFANA_ADMIN_PASSWORD`). A dashboard **Microservices Observability Dashboard** is **auto-provisioned**; open [http://localhost:3005/d/ms-observability/microservices-observability-dashboard](http://localhost:3005/d/ms-observability/microservices-observability-dashboard) (or **Dashboards** in the left menu).
+- Logs: `docker compose logs -f api-gateway` (JSON lines include `"service":"api-gateway"`).
+
+---
+
+## HW#5 – Security & AI
+
+- **Passwords:** **auth-service** stores **bcrypt** hashes only; demo logins remain `admin` / `admin123` and `user` / `user123`.
+- **JWT secret:** **auth-service** and **task-service** require **`JWT_SECRET`** from the environment (Compose still supplies a default via `${JWT_SECRET:-homework_secret}` for local runs).
+- **Rate limiting:** **api-gateway** uses **express-rate-limit**: stricter limit on **`POST /auth/login`**, general limit on other routes (`/health`, `/metrics`, and `/auth/login` are excluded from the general limiter).
+- **AI summarization:** **`POST /ai/summarize`** on the gateway accepts JSON `{ "text": "..." }`. If **`OPENAI_API_KEY`** is set, the gateway calls the OpenAI Chat Completions API (`gpt-4o-mini`); otherwise it returns a **mock** summary.
 
 ---
 
@@ -127,6 +166,8 @@ Gateway routes:
 /tasks
 /notifications
 /health
+/metrics
+/ai/summarize
 
 
 Port:
@@ -310,7 +351,9 @@ If no token is provided, the server returns:
 
 
 GET /health
+GET /metrics
 POST /auth/login
+POST /ai/summarize
 GET /tasks
 GET /tasks/:id
 POST /tasks
@@ -325,6 +368,7 @@ GET /notifications
 
 
 GET /health
+GET /metrics
 POST /auth/login
 
 
@@ -334,6 +378,7 @@ POST /auth/login
 
 
 GET /health
+GET /metrics
 GET /tasks
 GET /tasks/:id
 POST /tasks
@@ -347,6 +392,7 @@ DELETE /tasks/:id
 
 
 GET /health
+GET /metrics
 POST /notifications
 GET /notifications
 
@@ -519,25 +565,37 @@ The response will be:
 
 hw2-microservices
 │
+├── .github/workflows/ci-cd.yml
+├── docs/architecture-diagram.png
+├── monitoring/prometheus.yml
+├── monitoring/grafana/provisioning/…
+├── monitoring/grafana/dashboards/microservices-dashboard.json
+├── docker-compose.yml
+├── deploy.sh
+├── .env.example
+│
 ├── api-gateway
 │ ├── server.js
+│ ├── logger.js
+│ ├── metrics.js
 │ └── package.json
 │
 ├── auth-service
 │ ├── server.js
-│ ├── package.json
-│ └── .env
+│ ├── logger.js
+│ ├── metrics.js
+│ └── package.json
 │
 ├── task-service
 │ ├── src
 │ ├── index.js
-│ ├── package.json
-│ └── .env
+│ └── package.json
 │
 ├── notification-service
 │ ├── server.js
-│ ├── package.json
-│ └── .env
+│ ├── logger.js
+│ ├── metrics.js
+│ └── package.json
 │
 └── README.md
 

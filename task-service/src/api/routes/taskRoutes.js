@@ -4,7 +4,18 @@ import { InMemoryTaskRepository } from "../../infrastructure/persistence/InMemor
 import { Task } from "../../domain/entities/Task.js";
 import { auth } from "../middlewares/auth.js";
 import axios from "axios";
+import axiosRetry from "axios-retry";
 import { env } from "../../config/env.js";
+import { logger } from "../../infrastructure/logger/logger.js";
+
+const notificationClient = axios.create({ timeout: 5000 });
+axiosRetry(notificationClient, {
+  retries: 2,
+  retryDelay: axiosRetry.exponentialDelay,
+  retryCondition: (error) =>
+    axiosRetry.isNetworkOrIdempotentRequestError(error) ||
+    (error.response?.status >= 500 && error.response?.status < 600),
+});
 export const taskRoutes = Router();
 const repo = new InMemoryTaskRepository();
 
@@ -26,14 +37,17 @@ taskRoutes.post("/", auth, async (req, res) => {
   const entity = new Task({ ...body });
   const created = repo.create(entity);
   try {
-    await axios.post(`${env.NOTIFICATION_SERVICE_URL}/notifications`, {
+    await notificationClient.post(`${env.NOTIFICATION_SERVICE_URL}/notifications`, {
       message: "Task created successfully",
       taskId: created.id,
       taskTitle: created.title,
       createdBy: req.user?.username || "unknown",
     });
   } catch (notificationError) {
-  console.error("Notification service error:", notificationError.message);
+    logger.warn(
+      { err: notificationError.message },
+      "notification service error after retries"
+    );
   }
   res.status(201).json(created);
 });
