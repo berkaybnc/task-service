@@ -11,4 +11,7 @@ export const env = {
   JWT_SECRET,
   NOTIFICATION_SERVICE_URL:
     process.env.NOTIFICATION_SERVICE_URL || "http://localhost:3003",
+  databaseUrl: process.env.DATABASE_URL,
+  redisUrl: process.env.REDIS_URL,
+  internalApiKey: process.env.INTERNAL_API_KEY,
 };

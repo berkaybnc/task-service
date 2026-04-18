@@ -8,7 +8,10 @@ import {
   Clock, 
   Circle,
   AlertCircle,
-  LayoutDashboard
+  MoreHorizontal,
+  Layout,
+  ChevronRight,
+  Monitor
 } from 'lucide-react';
 import './App.css';
 
@@ -21,6 +24,7 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const [newTask, setNewTask] = useState({ title: '', description: '' });
 
@@ -64,10 +68,11 @@ function App() {
     e.preventDefault();
     if (!newTask.title) return;
     try {
-      await axios.post(`${API_URL}/tasks`, newTask, {
+      await axios.post(`${API_URL}/tasks`, { ...newTask, status: 'todo' }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setNewTask({ title: '', description: '' });
+      setShowAddForm(false);
       fetchTasks();
     } catch (err) {
       setError('Failed to create task');
@@ -96,6 +101,12 @@ function App() {
     }
   };
 
+  const columns = [
+    { id: 'todo', title: 'To Do', icon: <Circle size={16} /> },
+    { id: 'doing', title: 'In Progress', icon: <Clock size={16} /> },
+    { id: 'done', title: 'Done', icon: <CheckCircle2 size={16} /> }
+  ];
+
   if (!token) {
     return (
       <div className="container">
@@ -104,7 +115,10 @@ function App() {
           <div className="blob blob-2"></div>
         </div>
         <div className="glass-card auth-container">
-          <h1>Task Manager</h1>
+          <div className="auth-logo">
+             <Layout size={32} color="var(--primary)" />
+             <h1>Task Manager</h1>
+          </div>
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label>Username</label>
@@ -126,8 +140,8 @@ function App() {
                 required
               />
             </div>
-            {error && <div className="error-msg" style={{ color: 'var(--danger)', fontSize: '0.8rem', marginBottom: '1rem' }}><AlertCircle size={14} style={{ marginRight: 4 }} /> {error}</div>}
-            <button type="submit" disabled={loading}>
+            {error && <div className="error-msg"><AlertCircle size={14} /> {error}</div>}
+            <button type="submit" disabled={loading} className="primary-btn">
               {loading ? 'Logging in...' : 'Sign In'}
             </button>
           </form>
@@ -137,93 +151,111 @@ function App() {
   }
 
   return (
-    <div className="container">
-      <div className="bg-blobs">
-        <div className="blob blob-1"></div>
-        <div className="blob blob-2"></div>
-      </div>
-      
-      <div className="dashboard">
-        <div className="task-section">
-          <div className="header">
-            <div>
-              <h1 style={{ textAlign: 'left', marginBottom: '0.5rem' }}>Dashboard</h1>
-              <div className="stats">
-                <div className="stat-pill"><Clock size={14} inline /> {tasks.filter(t => t.status !== 'done').length} Pending</div>
-                <div className="stat-pill"><CheckCircle2 size={14} inline /> {tasks.filter(t => t.status === 'done').length} Completed</div>
+    <div className="app-shell">
+      <nav className="navbar">
+        <div className="nav-left">
+          <Layout size={20} color="var(--primary)" />
+          <span className="logo-text">Trello Board</span>
+        </div>
+        <div className="nav-right">
+          <div className="user-info">
+            <div className="avatar">{username[0]?.toUpperCase() || 'A'}</div>
+            <span>{username}</span>
+          </div>
+          <button onClick={handleLogout} className="logout-btn">
+            <LogOut size={16} />
+          </button>
+        </div>
+      </nav>
+
+      <main className="board-container">
+        <div className="board-header">
+           <div className="board-title">
+             <h2>My Digital Board</h2>
+             <span className="badge">Public</span>
+           </div>
+           <button className="add-board-btn" onClick={() => setShowAddForm(true)}>
+             <Plus size={16} /> Add Card
+           </button>
+        </div>
+
+        <div className="kanban-board">
+          {columns.map(col => (
+            <div key={col.id} className="kanban-column">
+              <div className="column-header">
+                <div className="column-title">
+                  {col.icon}
+                  <h3>{col.title}</h3>
+                  <span className="count">{tasks.filter(t => t.status === col.id).length}</span>
+                </div>
+                <MoreHorizontal size={16} className="more-btn" />
+              </div>
+
+              <div className="task-list">
+                {tasks.filter(t => t.status === col.id).map(task => (
+                  <div key={task.id} className="kanban-card">
+                    <div className="card-content">
+                      <h4>{task.title}</h4>
+                      {task.description && <p>{task.description}</p>}
+                    </div>
+                    
+                    <div className="card-footer">
+                      <div className="card-actions">
+                         {col.id === 'todo' && (
+                           <button onClick={() => handleUpdateStatus(task.id, 'doing')} title="Start Task">
+                             <Clock size={14} />
+                           </button>
+                         )}
+                         {col.id === 'doing' && (
+                           <button onClick={() => handleUpdateStatus(task.id, 'done')} title="Complete Task">
+                             <CheckCircle2 size={14} />
+                           </button>
+                         )}
+                         <button className="del-btn" onClick={() => handleDeleteTask(task.id)} title="Delete">
+                           <Trash2 size={14} />
+                         </button>
+                      </div>
+                      <div className="card-meta">
+                        <Monitor size={12} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {col.id === 'todo' && !showAddForm && (
+                  <button className="add-inline-btn" onClick={() => setShowAddForm(true)}>
+                    <Plus size={14} /> Add a card
+                  </button>
+                )}
+                
+                {col.id === 'todo' && showAddForm && (
+                  <div className="inline-add-card">
+                    <form onSubmit={handleCreateTask}>
+                      <input 
+                        autoFocus
+                        placeholder="Enter card title..."
+                        value={newTask.title}
+                        onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                      />
+                      <textarea 
+                        placeholder="Description (optional)..."
+                        value={newTask.description}
+                        onChange={(e) => setNewTask({...newTask, description: e.target.value})}
+                      />
+                      <div className="inline-actions">
+                        <button type="submit" className="save-btn">Add Card</button>
+                        <button type="button" className="cancel-btn" onClick={() => setShowAddForm(false)}>
+                          <Plus size={20} style={{ transform: 'rotate(45deg)' }} />
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
               </div>
             </div>
-            <button onClick={handleLogout} className="icon-btn" style={{ width: 'auto', padding: '0 1rem', marginTop: 0 }}>
-              <LogOut size={16} style={{ marginRight: 8 }} /> Logout
-            </button>
-          </div>
-
-          <div className="task-grid">
-            {tasks.map(task => (
-              <div key={task.id} className={`task-card ${task.status}`}>
-                <div className="task-title">{task.title}</div>
-                <div className="task-desc">{task.description || 'No description provided.'}</div>
-                <div className="task-footer">
-                  <div className="actions">
-                    <button className="icon-btn delete" onClick={() => handleDeleteTask(task.id)} title="Delete">
-                      <Trash2 size={16} />
-                    </button>
-                    {task.status !== 'done' && (
-                      <button className="icon-btn success" onClick={() => handleUpdateStatus(task.id, 'done')} title="Complete">
-                        <CheckCircle2 size={16} />
-                      </button>
-                    )}
-                    {task.status === 'todo' && (
-                      <button className="icon-btn" onClick={() => handleUpdateStatus(task.id, 'doing')} title="Start">
-                        <Clock size={16} />
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    {task.status.toUpperCase()}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {tasks.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>No tasks found. Get started by adding one!</div>}
-          </div>
+          ))}
         </div>
-
-        <div className="panel">
-          <div className="glass-card add-task-form">
-            <h2><Plus size={18} style={{ marginRight: 8 }} inline /> New Task</h2>
-            <form onSubmit={handleCreateTask}>
-              <div className="form-group">
-                <input 
-                  type="text" 
-                  value={newTask.title} 
-                  onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                  placeholder="Task title..."
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <textarea 
-                  value={newTask.description}
-                  onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                  placeholder="Details..."
-                  style={{ 
-                    width: '100%', 
-                    background: 'rgba(15, 23, 42, 0.5)', 
-                    border: '1px solid var(--border)', 
-                    padding: '0.75rem 1rem',
-                    borderRadius: '12px',
-                    color: 'white',
-                    height: '100px',
-                    resize: 'none'
-                  }}
-                />
-              </div>
-              <button type="submit">Create Task</button>
-            </form>
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

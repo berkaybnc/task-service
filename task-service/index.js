@@ -12,6 +12,7 @@ import { logger } from "./src/infrastructure/logger/logger.js";
 import { errorHandler } from "./src/api/middlewares/errorHandler.js";
 import { env } from "./src/config/env.js";
 import { metricsMiddleware, metricsHandler } from "./src/infrastructure/metrics.js";
+import sequelize from "./src/infrastructure/database.js";
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     service: "task-service",
+    database: "connected",
     time: new Date().toISOString(),
   });
 });
@@ -57,7 +59,17 @@ const isMain =
   import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 
 if (isMain) {
-  app.listen(env.PORT, () => {
-    logger.info({ port: env.PORT }, "Task Service listening");
-  });
+  (async () => {
+    try {
+      await sequelize.authenticate();
+      await sequelize.sync();
+      logger.info("Database connected and synced");
+    } catch (err) {
+      logger.error({ err }, "Database connection failed");
+    }
+    
+    app.listen(env.PORT, () => {
+      logger.info({ port: env.PORT }, "Task Service listening");
+    });
+  })();
 }

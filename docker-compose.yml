@@ -1,9 +1,40 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_MULTIPLE_DATABASES: auth_db,task_db,notification_db
+    volumes:
+      - ./infra/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   auth-service:
     build: ./auth-service
     environment:
       PORT: 3001
       JWT_SECRET: ${JWT_SECRET:-homework_secret}
+      DATABASE_URL: postgres://user:password@postgres:5432/auth_db
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev_internal_secret_key}
+    depends_on:
+      postgres:
+        condition: service_healthy
     expose:
       - "3001"
     healthcheck:
@@ -17,6 +48,11 @@ services:
     build: ./notification-service
     environment:
       PORT: 3003
+      DATABASE_URL: postgres://user:password@postgres:5432/notification_db
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev_internal_secret_key}
+    depends_on:
+      postgres:
+        condition: service_healthy
     expose:
       - "3003"
     healthcheck:
@@ -31,9 +67,14 @@ services:
     environment:
       PORT: 8080
       JWT_SECRET: ${JWT_SECRET:-homework_secret}
+      DATABASE_URL: postgres://user:password@postgres:5432/task_db
+      REDIS_URL: redis://redis:6379
       NOTIFICATION_SERVICE_URL: http://notification-service:3003
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev_internal_secret_key}
     depends_on:
-      notification-service:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     expose:
       - "8080"
@@ -53,6 +94,7 @@ services:
       AUTH_SERVICE_URL: http://auth-service:3001
       TASK_SERVICE_URL: http://task-service:8080
       NOTIFICATION_SERVICE_URL: http://notification-service:3003
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev_internal_secret_key}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       auth-service:
