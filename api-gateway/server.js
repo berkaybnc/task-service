@@ -89,6 +89,19 @@ app.post("/auth/login", loginLimiter, async (req, res) => {
   }
 });
 
+app.post("/auth/register", async (req, res) => {
+  try {
+    const response = await internalRequest.post(`${AUTH_SERVICE_URL}/auth/register`, req.body);
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    logger.error({ err: error }, "gateway registration forwarding error");
+    return res.status(500).json({ message: "Gateway registration forwarding error" });
+  }
+});
+
 app.post("/ai/summarize", async (req, res) => {
   const text = req.body?.text;
   if (!text || typeof text !== "string") {
@@ -212,6 +225,69 @@ app.delete("/tasks/:id", async (req, res) => {
     }
     logger.error({ err: error }, "gateway task delete forwarding error");
     return res.status(500).json({ message: "Gateway task delete forwarding error" });
+  }
+});
+
+// NEW PROXY ROUTES
+app.get("/users", async (req, res) => {
+  try {
+    const response = await internalRequest.get(`${AUTH_SERVICE_URL}/users`);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching users" });
+  }
+});
+
+app.get("/teams", async (req, res) => {
+  try {
+    const response = await internalRequest.get(`${AUTH_SERVICE_URL}/teams`);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching teams" });
+  }
+});
+
+app.post("/teams", async (req, res) => {
+  try {
+    const response = await internalRequest.post(`${AUTH_SERVICE_URL}/teams`, req.body);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    res.status(500).json({ message: "Error creating team" });
+  }
+});
+
+app.post("/teams/:id/members", async (req, res) => {
+  try {
+    const response = await internalRequest.post(`${AUTH_SERVICE_URL}/teams/${req.params.id}/members`, req.body);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    res.status(500).json({ message: "Error adding team member" });
+  }
+});
+
+app.get("/projects", async (req, res) => {
+  try {
+    const response = await internalRequest.get(`${TASK_SERVICE_URL}/tasks/projects`);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    res.status(500).json({ message: "Error fetching projects" });
+  }
+});
+
+app.post("/projects", async (req, res) => {
+  try {
+    const response = await internalRequest.post(`${TASK_SERVICE_URL}/tasks/projects`, req.body, {
+      headers: { Authorization: req.headers.authorization }
+    });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    res.status(500).json({ message: "Error creating project" });
   }
 });
 

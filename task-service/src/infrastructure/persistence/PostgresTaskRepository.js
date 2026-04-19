@@ -1,6 +1,22 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../database.js";
 
+const ProjectModel = sequelize.define("Project", {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true,
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  teamId: {
+    type: DataTypes.UUID,
+    allowNull: true, // Optional for personal projects, but teams will use it
+  },
+});
+
 const TaskModel = sequelize.define("Task", {
   id: {
     type: DataTypes.UUID,
@@ -19,13 +35,26 @@ const TaskModel = sequelize.define("Task", {
     type: DataTypes.STRING,
     defaultValue: "todo",
   },
+  projectId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+  assigneeId: {
+    type: DataTypes.STRING, // Using username or uuid
+    allowNull: true,
+  }
 });
+
+TaskModel.belongsTo(ProjectModel, { foreignKey: 'projectId' });
+ProjectModel.hasMany(TaskModel, { foreignKey: 'projectId' });
 
 export class PostgresTaskRepository {
   constructor() {
     this.model = TaskModel;
+    this.projectModel = ProjectModel;
     // Sync table in constructor for simplicity in this project
-    this.model.sync();
+    this.projectModel.sync({ alter: true });
+    this.model.sync({ alter: true });
   }
 
   async create(data) {
@@ -53,5 +82,23 @@ export class PostgresTaskRepository {
   async delete(id) {
     const deletedCount = await this.model.destroy({ where: { id } });
     return deletedCount > 0;
+  }
+
+  // Project Methods
+  async createProject(data) {
+    const project = await this.projectModel.create(data);
+    return project.toJSON();
+  }
+
+  async findAllProjects() {
+    const projects = await this.projectModel.findAll({
+      order: [['createdAt', 'ASC']]
+    });
+    return projects.map(p => p.toJSON());
+  }
+
+  async findProjectsByTeam(teamId) {
+    const projects = await this.projectModel.findAll({ where: { teamId } });
+    return projects.map(p => p.toJSON());
   }
 }

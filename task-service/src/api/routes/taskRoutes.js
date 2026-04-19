@@ -33,12 +33,16 @@ const createSchema = z.object({
   title: z.string().min(2),
   description: z.string().optional(),
   status: z.enum(["todo", "doing", "done"]).optional(),
+  projectId: z.string().uuid().optional(),
+  assigneeId: z.string().optional(),
 });
 
 const updateSchema = z.object({
   title: z.string().min(2).optional(),
   description: z.string().optional(),
   status: z.enum(["todo", "doing", "done"]).optional(),
+  projectId: z.string().uuid().optional(),
+  assigneeId: z.string().optional(),
 });
 
 // CREATE
@@ -88,6 +92,28 @@ taskRoutes.get("/", async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Failed to fetch tasks");
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PROJECTS
+taskRoutes.get("/projects", async (req, res) => {
+  try {
+    const projects = await repo.findAllProjects();
+    res.json(projects);
+  } catch (err) {
+    logger.error(err, "Failed to fetch projects");
+    res.status(500).json({ error: "Failed to fetch projects", details: err.message });
+  }
+});
+
+taskRoutes.post("/projects", auth, async (req, res) => {
+  try {
+    const { title, teamId } = req.body;
+    const project = await repo.createProject({ title, teamId });
+    res.status(201).json(project);
+  } catch (err) {
+    logger.error(err, "Failed to create project");
+    res.status(500).json({ error: "Failed to create project", details: err.message });
   }
 });
 
