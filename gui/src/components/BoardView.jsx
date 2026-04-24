@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import TaskCard from './TaskCard';
 import { Plus, MoreHorizontal, ChevronDown, CircleDot, Trash2 } from 'lucide-react';
 
-const BoardView = ({ tasks, onUpdateStatus, onDelete, onAddTask, onUpdateAssignee, users }) => {
+const BoardView = ({ tasks, onUpdateStatus, onDelete, onAddTask, onUpdateAssignee, onTaskClick, users, t }) => {
   const [dragOverCol, setDragOverCol] = useState(null);
 
   const [columns, setColumns] = useState(() => {
     const saved = localStorage.getItem('board_columns');
     return saved ? JSON.parse(saved) : [
-      { id: 'todo', title: 'YAPILACAKLAR', badgeClass: 'badge-todo', color: '#888' },
+      { id: 'todo', title: t.status.toUpperCase() + ': ' + t.all, badgeClass: 'badge-todo', color: '#888' },
       { id: 'doing', title: 'DEVAM EDİYOR', badgeClass: 'badge-doing', color: '#0081ff' },
-      { id: 'done', title: 'TAMAMLANDI', badgeClass: 'badge-green', color: '#28bb7c' }
+      { id: 'done', title: t.status.toUpperCase() + ': DONE', badgeClass: 'badge-green', color: '#28bb7c' }
     ];
   });
 
@@ -115,12 +115,13 @@ const BoardView = ({ tasks, onUpdateStatus, onDelete, onAddTask, onUpdateAssigne
                   onUpdateStatus={onUpdateStatus} 
                   onDelete={onDelete} 
                   onUpdateAssignee={onUpdateAssignee}
+                  onClick={() => onTaskClick(task)}
                   users={users}
                 />
               ))}
             
             <div className="add-task-ghost" onClick={() => onAddTask(col.id)}>
-              <Plus size={14} /> Görev Ekle
+              <Plus size={14} /> {t.addTask}
             </div>
           </div>
         </div>
@@ -149,7 +150,7 @@ const BoardView = ({ tasks, onUpdateStatus, onDelete, onAddTask, onUpdateAssigne
             onClick={() => setIsAddingColumn(true)}
             style={{width: '100%', border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)', borderRadius: '8px', padding: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}
           >
-            <Plus size={16} /> Grup Ekle
+            <Plus size={16} /> {t.group} {t.addTask}
           </button>
         )}
       </div>

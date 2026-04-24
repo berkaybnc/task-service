@@ -7,7 +7,9 @@ import {
   List as ListIcon,
   Table as TableIcon,
   Columns as BoardIcon,
-  Sparkles
+  Sparkles,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 import Sidebar from './components/Sidebar';
@@ -16,9 +18,14 @@ import BoardView from './components/BoardView';
 import ListView from './components/ListView';
 import TableView from './components/TableView';
 import CalendarView from './components/CalendarView';
+import TaskDetailModal from './components/TaskDetailModal';
+import DashboardView from './components/DashboardView';
+import translations from './translations';
+import { io } from 'socket.io-client';
 import './App.css';
 
 const API_URL = 'http://127.0.0.1:5001/api';
+const WS_URL = 'http://127.0.0.1:5001';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
@@ -63,6 +70,35 @@ function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [taskFilter, setTaskFilter] = useState('all'); 
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [lang, setLang] = useState(localStorage.getItem('lang') || 'tr');
+  const [selectedTask, setSelectedTask] = useState(null);
+
+  const t = translations[lang];
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('lang', lang);
+  }, [lang]);
+
+  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  const toggleLang = () => setLang(prev => prev === 'tr' ? 'en' : 'tr');
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.querySelector('.search-pill-input');
+        if (searchInput) searchInput.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const [sortBy, setSortBy] = useState('title'); 
   const [filterPriority, setFilterPriority] = useState(null);
   const [filterAssignee, setFilterAssignee] = useState(null);
@@ -81,6 +117,24 @@ function App() {
       return null;
     }
   }, [token]);
+
+  useEffect(() => {
+    const currentUsername = user?.username;
+    if (token && currentUsername) {
+      const newSocket = io(WS_URL);
+      newSocket.on('connect', () => {
+        newSocket.emit('identify', currentUsername);
+      });
+
+      newSocket.on('notification', (data) => {
+        console.log('WS Notification Received:', data);
+        fetchTasks();
+        window.dispatchEvent(new CustomEvent('ws-notification', { detail: data }));
+      });
+
+      return () => newSocket.close();
+    }
+  }, [token, user?.username, fetchTasks]);
 
   const fetchProjects = useCallback(async () => {
     if (!token) return;
@@ -415,25 +469,33 @@ function App() {
 
 
   const renderView = () => {
+    const viewProps = {
+      tasks: computedTasks,
+      onUpdateStatus: handleUpdateStatus,
+      onDelete: handleDeleteTask,
+      onUpdateAssignee: handleUpdateAssignee,
+      onTaskClick: setSelectedTask,
+      users: users,
+      t: t,
+      lang: lang
+    };
+
     switch (view) {
-      case 'list': return <ListView tasks={computedTasks} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteTask} onUpdateAssignee={handleUpdateAssignee} users={users} />;
-      case 'table': return <TableView tasks={computedTasks} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteTask} onUpdateAssignee={handleUpdateAssignee} users={users} />;
-      case 'calendar': return <CalendarView tasks={computedTasks} />;
+      case 'list': return <ListView {...viewProps} />;
+      case 'table': return <TableView {...viewProps} />;
+      case 'calendar': return <CalendarView {...viewProps} />;
+      case 'dashboard': return <DashboardView {...viewProps} />;
       case 'gantt': return <div className="p-4 text-center">Gantt Görünümü Yakında...</div>;
       case 'home': return (
         <div className="p-10 text-center">
-          <h2 className="text-2xl font-bold mb-4">Hoş geldin, {displayName}!</h2>
-          <p className="text-muted">Bugün yapacak çok işin var. Hadi başlayalım!</p>
+          <h2 className="text-2xl font-bold mb-4">{lang === 'tr' ? 'Hoş geldin' : 'Welcome'}, {displayName}!</h2>
+          <p className="text-muted">{lang === 'tr' ? 'Bugün yapacak çok işin var. Hadi başlayalım!' : 'You have a lot to do today. Let\'s get started!'}</p>
         </div>
       );
       default: return (
         <BoardView 
-          tasks={computedTasks} 
-          onUpdateStatus={handleUpdateStatus} 
-          onDelete={handleDeleteTask}
+          {...viewProps}
           onAddTask={(col) => { setTargetColumn(col); setShowAddForm(true); }}
-          onUpdateAssignee={handleUpdateAssignee}
-          users={users}
         />
       );
     }
@@ -546,6 +608,7 @@ function App() {
           taskFilter={taskFilter}
           onTaskFilterChange={setTaskFilter}
           onDeleteProject={handleDeleteProject}
+          t={t}
         />
       </div>
       
@@ -562,6 +625,14 @@ function App() {
           onFilterPriority={setFilterPriority}
           onFilterAssignee={setFilterAssignee}
           users={users}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          t={t}
+          lang={lang}
+          onToggleLang={toggleLang}
+          token={token}
+          username={user?.username}
+          onTaskClick={setSelectedTask}
         />
         
         <main style={{ flex: 1, overflow: 'auto' }}>
@@ -572,39 +643,39 @@ function App() {
       {showAddForm && (
         <div className="modal-overlay">
           <div className="modal-card">
-            <h3>{targetColumn.toUpperCase()} Sütununa Yeni Görev Ekle</h3>
+            <h3>{targetColumn.toUpperCase()} {t.addTask}</h3>
             <form onSubmit={handleCreateTask}>
               <div className="form-group">
-                <label>Görev Adı</label>
-                <input autoFocus placeholder="Görev Adı" className="form-input" value={newTask.title} onChange={(e) => setNewTask({...newTask, title: e.target.value})} required/>
+                <label>{t.title}</label>
+                <input autoFocus placeholder={t.title} className="form-input" value={newTask.title} onChange={(e) => setNewTask({...newTask, title: e.target.value})} required/>
               </div>
               <div className="form-group">
-                <label>Açıklama</label>
-                <textarea placeholder="Açıklama..." className="form-input" style={{minHeight: '80px'}} value={newTask.description} onChange={(e) => setNewTask({...newTask, description: e.target.value})}/>
+                <label>{t.description}</label>
+                <textarea placeholder={t.description + "..."} className="form-input" style={{minHeight: '80px'}} value={newTask.description} onChange={(e) => setNewTask({...newTask, description: e.target.value})}/>
               </div>
               <div className="form-row-modern" style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
                 <div className="form-group" style={{flex: 1}}>
-                  <label>Sorumlu</label>
+                  <label>{t.assignee}</label>
                   <select className="form-input" value={newTask.assigneeId} onChange={(e) => setNewTask({...newTask, assigneeId: e.target.value})}>
-                    <option value="">Sorumlu Yok</option>
+                    <option value="">{t.noAssignee}</option>
                     {users.map(u => <option key={u.id} value={u.username}>{u.username}</option>)}
                   </select>
                 </div>
                 <div className="form-group" style={{flex: 1}}>
-                  <label>Proje</label>
+                  <label>{t.projects}</label>
                   <select className="form-input" value={newTask.projectId} onChange={(e) => setNewTask({...newTask, projectId: e.target.value})}>
-                    <option value="">Proje Yok</option>
+                    <option value="">{t.noAssignee}</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
                   </select>
                 </div>
                 <div className="form-group" style={{flex: 1}}>
-                  <label>Teslim Tarihi</label>
+                  <label>{t.dueDate}</label>
                   <input type="date" className="form-input" value={newTask.dueDate} onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})} />
                 </div>
               </div>
               <div className="modal-actions">
-                <button type="button" className="cancel-btn-modal" onClick={() => setShowAddForm(false)}>İptal</button>
-                <button type="submit" className="save-btn-modal">Görev Oluştur</button>
+                <button type="button" className="cancel-btn-modal" onClick={() => setShowAddForm(false)}>{t.cancel}</button>
+                <button type="submit" className="save-btn-modal">{t.save}</button>
               </div>
             </form>
           </div>
@@ -687,6 +758,16 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedTask && (
+        <TaskDetailModal 
+          task={selectedTask}
+          token={token}
+          t={t}
+          lang={lang}
+          onClose={() => setSelectedTask(null)}
+        />
       )}
     </div>
   );

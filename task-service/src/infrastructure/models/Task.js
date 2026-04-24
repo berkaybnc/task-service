@@ -7,6 +7,7 @@ const TaskSchema = new mongoose.Schema({
   priority: { type: String, default: "medium" },
   assigneeId: String,
   projectId: String,
+  ownerId: String,
   dueDate: Date,
   tags: [String]
 }, { timestamps: true });

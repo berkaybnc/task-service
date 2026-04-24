@@ -14,4 +14,5 @@ export const env = {
   mongodbUri: process.env.MONGODB_URI,
   redisUrl: process.env.REDIS_URL,
   internalApiKey: process.env.INTERNAL_API_KEY,
+  API_GATEWAY_URL: process.env.API_GATEWAY_URL || "http://localhost:5001"
 };

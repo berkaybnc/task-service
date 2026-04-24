@@ -11,7 +11,7 @@ import {
   Trash2
 } from 'lucide-react';
 
-const ListView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = [] }) => {
+const ListView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, onTaskClick, users = [], t }) => {
   const [expandedGroups, setExpandedGroups] = useState({
     todo: true,
     doing: true,
@@ -23,9 +23,9 @@ const ListView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = [
   };
 
   const statusConfig = {
-    todo: { label: 'YAPILACAKLAR', color: '#888', iconColor: '#888' },
+    todo: { label: t.status.toUpperCase() + ': ' + t.all, color: '#888', iconColor: '#888' },
     doing: { label: 'DEVAM EDİYOR', color: '#2196f3', iconColor: '#2196f3' },
-    done: { label: 'TAMAMLANDI', color: '#4caf50', iconColor: '#4caf50' }
+    done: { label: t.status.toUpperCase() + ': DONE', color: '#4caf50', iconColor: '#4caf50' }
   };
 
   const groupedTasks = {
@@ -50,16 +50,16 @@ const ListView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = [
         {isExpanded && (
           <div className="group-content">
             <div className="list-table-header">
-              <div className="col-task">Ad</div>
-              <div className="col-assignee">Sorumlu</div>
-              <div className="col-date">Teslim Tarihi</div>
-              <div className="col-priority">Öncelik</div>
-              <div className="col-status-pill">Durum</div>
+              <div className="col-task">{t.title}</div>
+              <div className="col-assignee">{t.assignee}</div>
+              <div className="col-date">{t.dueDate}</div>
+              <div className="col-priority">{t.priority}</div>
+              <div className="col-status-pill">{t.status}</div>
               <div className="col-comments"></div>
             </div>
 
             {groupTasks.map(task => (
-              <div key={task.id} className="list-task-row">
+              <div key={task.id} className="list-task-row" onClick={() => onTaskClick(task)} style={{cursor: 'pointer'}}>
                 <div className="col-task">
                   <Circle 
                     size={16} 
@@ -90,8 +90,9 @@ const ListView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = [
                         cursor: 'pointer',
                         zIndex: 2
                       }}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <option value="">Sorumlu Yok</option>
+                      <option value="">{t.noAssignee}</option>
                       {users.map(u => (
                         <option key={u.id} value={u.username}>{u.username}</option>
                       ))}
@@ -130,7 +131,7 @@ const ListView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = [
 
             <div className="add-task-btn-list" onClick={() => window.dispatchEvent(new CustomEvent('open-task-modal'))}>
               <Plus size={14} />
-              <span>Görev Ekle</span>
+              <span>{t.addTask}</span>
             </div>
           </div>
         )}

@@ -10,7 +10,7 @@ import {
   Layout
 } from 'lucide-react';
 
-const TaskCard = ({ task, onDelete, onUpdateAssignee, users = [] }) => {
+const TaskCard = ({ task, onDelete, onUpdateAssignee, onClick, users = [] }) => {
   const handleDragStart = (e) => {
     const taskId = task.id || task._id;
     e.dataTransfer.setData('taskId', taskId);
@@ -41,6 +41,7 @@ const TaskCard = ({ task, onDelete, onUpdateAssignee, users = [] }) => {
       draggable 
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onClick={onClick}
     >
       <div className="card-title-v3">{task.title}</div>
       

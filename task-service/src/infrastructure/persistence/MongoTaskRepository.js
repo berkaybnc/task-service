@@ -29,8 +29,8 @@ export class MongoTaskRepository {
   }
 
   // Project Methods
-  async findAllProjects() {
-    return await Project.find();
+  async findAllProjects(filter = {}) {
+    return await Project.find(filter);
   }
 
   async createProject(projectData) {

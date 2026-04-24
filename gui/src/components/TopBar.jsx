@@ -27,8 +27,11 @@ import {
   Clock,
   Hash,
   CircleDot,
-  Home
+  Home,
+  Sun,
+  Moon
 } from 'lucide-react';
+import NotificationCenter from './NotificationCenter';
 
 const TopBar = ({ 
   currentView, 
@@ -41,7 +44,15 @@ const TopBar = ({
   onSortChange,
   onFilterPriority,
   onFilterAssignee,
-  users
+  users,
+  theme,
+  onToggleTheme,
+  t,
+  lang,
+  onToggleLang,
+  token,
+  username,
+  onTaskClick
 }) => {
   return (
     <div className="top-bar-container">
@@ -50,14 +61,19 @@ const TopBar = ({
         <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
           <ChevronLeft size={18} className="text-muted" cursor="pointer" />
           <ChevronRight size={18} className="text-muted" cursor="pointer" />
-          <Search size={16} className="text-muted" style={{marginLeft: '8px'}} />
+          <div className="toolbar-btn" onClick={onToggleTheme} style={{marginLeft: '8px'}}>
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </div>
+          <div className="toolbar-btn" onClick={onToggleLang} style={{marginLeft: '4px', fontWeight: 'bold', fontSize: '12px'}}>
+            {lang.toUpperCase()}
+          </div>
         </div>
 
         <div className="search-pill">
           <Search size={14} />
           <input 
             type="text" 
-            placeholder="Görevlerde ara..." 
+            placeholder={t.searchPlaceholder} 
             value={searchTerm} 
             onChange={(e) => onSearchChange(e.target.value)}
             style={{background: 'none', border: 'none', color: 'white', outline: 'none', fontSize: '13px', width: '100%'}}
@@ -65,9 +81,16 @@ const TopBar = ({
         </div>
 
         <div className="global-header-actions">
-           <div className="badge-ask-ai" onClick={onAiAsk} style={{cursor: 'pointer'}}><Sparkles size={16} /> Yapay Zekaya Sor</div>
-           <div className="toolbar-btn"><Share2 size={16} /> Paylaş</div>
-           <div className="user-avatar-tiny" style={{width: '24px', height: '24px', fontSize: '11px', backgroundColor: '#444'}}>BB</div>
+           <div className="badge-ask-ai" onClick={onAiAsk} style={{cursor: 'pointer'}}><Sparkles size={16} /> {t.askAi}</div>
+           <NotificationCenter 
+             token={token} 
+             username={username} 
+             onTaskClick={onTaskClick} 
+             t={t} 
+             lang={lang} 
+           />
+           <div className="toolbar-btn"><Share2 size={16} /> {t.share}</div>
+           <div className="user-avatar-tiny" style={{width: '24px', height: '24px', fontSize: '11px', backgroundColor: 'var(--primary)', fontWeight: '700'}}>{username ? username[0].toUpperCase() : 'U'}</div>
         </div>
       </div>
 
@@ -75,7 +98,7 @@ const TopBar = ({
       <div className="top-bar-row row-nav">
         <div className="nav-breadcrumbs">
           <Users size={14} className="text-primary" />
-          <span>Ekip Alanı</span>
+          <span>{t.teamWorkspace}</span>
           <ChevronRight size={14} />
           <Hash size={14} />
           <span className="breadcrumb-curr">{currentProject?.title || 'Tüm Görevler'}</span>
@@ -84,19 +107,22 @@ const TopBar = ({
 
         <nav className="view-switcher-tabs">
           <div className={`view-tab ${currentView === 'home' ? 'active' : ''}`} onClick={() => onViewChange('home')}>
-            <Home size={14} /> Ana Sayfa
+            <Home size={14} /> {t.home}
           </div>
           <div className={`view-tab ${currentView === 'list' ? 'active' : ''}`} onClick={() => onViewChange('list')}>
-            <List size={14} /> Liste
+            <List size={14} /> {t.list}
           </div>
           <div className={`view-tab ${currentView === 'board' ? 'active' : ''}`} onClick={() => onViewChange('board')}>
-            <BoardIcon size={14} /> Pano
+            <BoardIcon size={14} /> {t.board}
           </div>
           <div className={`view-tab ${currentView === 'calendar' ? 'active' : ''}`} onClick={() => onViewChange('calendar')}>
-            <Calendar size={14} /> Takvim
+            <Calendar size={14} /> {t.calendar}
           </div>
           <div className={`view-tab ${currentView === 'table' ? 'active' : ''}`} onClick={() => onViewChange('table')}>
-            <Table size={14} /> Tablo
+            <Table size={14} /> {t.table}
+          </div>
+          <div className={`view-tab ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => onViewChange('dashboard')}>
+            <Layers size={14} /> {lang === 'tr' ? 'Dashboard' : 'Dashboard'}
           </div>
         </nav>
       </div>
@@ -106,7 +132,7 @@ const TopBar = ({
          <div className="toolbar-left">
             <div className="toolbar-btn" style={{backgroundColor: 'rgba(255,255,255,0.05)', color: 'white'}}>
                <CircleDot size={12} className="text-muted" />
-               <span style={{fontSize: '11px', opacity: 0.6}}>Grup:</span> Durum
+               <span style={{fontSize: '11px'}}>{t.groupStatus}</span>
                <ChevronDown size={12} />
             </div>
          </div>
@@ -119,9 +145,9 @@ const TopBar = ({
                 value={sortBy} 
                 onChange={(e) => onSortChange(e.target.value)}
               >
-                <option value="title">Ad (A-Z)</option>
-                <option value="status">Durum</option>
-                <option value="priority">Öncelik</option>
+                <option value="title">{t.title} (A-Z)</option>
+                <option value="status">{t.status}</option>
+                <option value="priority">{t.priority}</option>
               </select>
               <ChevronDown size={12} className="text-muted" />
             </div>
@@ -132,10 +158,10 @@ const TopBar = ({
                 className="toolbar-select" 
                 onChange={(e) => onFilterPriority(e.target.value || null)}
               >
-                <option value="">Öncelik (Hepsi)</option>
-                <option value="high">Yüksek</option>
-                <option value="medium">Orta</option>
-                <option value="low">Düşük</option>
+                <option value="">{t.priority} ({t.all})</option>
+                <option value="high">{t.high}</option>
+                <option value="medium">{t.medium}</option>
+                <option value="low">{t.low}</option>
               </select>
               <ChevronDown size={12} className="text-muted" />
             </div>
@@ -146,14 +172,14 @@ const TopBar = ({
                 className="toolbar-select" 
                 onChange={(e) => onFilterAssignee(e.target.value || null)}
               >
-                <option value="">Sorumlu (Hepsi)</option>
+                <option value="">{t.assignee} ({t.all})</option>
                 {users.map(u => <option key={u.id} value={u.username}>{u.username}</option>)}
               </select>
               <ChevronDown size={12} className="text-muted" />
             </div>
 
             <button className="btn-add-task-blue" onClick={() => window.dispatchEvent(new CustomEvent('open-task-modal'))}>
-               Görev Ekle <Plus size={14} />
+               {t.addTask} <Plus size={14} />
             </button>
           </div>
       </div>

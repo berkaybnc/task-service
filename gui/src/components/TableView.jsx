@@ -1,12 +1,12 @@
 import React from 'react';
 import { Trash2, MessageSquare, Flag, Calendar } from 'lucide-react';
 
-const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = [] }) => {
+const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, onTaskClick, users = [], t }) => {
   const getStatusConfig = (status) => {
     switch (status) {
-      case 'todo': return { label: 'YAPILACAKLAR', color: '#888' };
+      case 'todo': return { label: t.status.toUpperCase() + ': ' + t.all, color: '#888' };
       case 'doing': return { label: 'DEVAM EDİYOR', color: '#2196f3' };
-      case 'done': return { label: 'TAMAMLANDI', color: '#4caf50' };
+      case 'done': return { label: t.status.toUpperCase() + ': DONE', color: '#4caf50' };
       default: return { label: status.toUpperCase(), color: '#666' };
     }
   };
@@ -17,11 +17,11 @@ const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = 
         <thead>
           <tr>
             <th className="index-col">#</th>
-            <th>Ad</th>
-            <th>Sorumlu</th>
-            <th>Durum</th>
-            <th>Teslim Tarihi</th>
-            <th>Öncelik</th>
+            <th>{t.title}</th>
+            <th>{t.assignee}</th>
+            <th>{t.status}</th>
+            <th>{t.dueDate}</th>
+            <th>{t.priority}</th>
             <th style={{ width: '50px' }}></th>
           </tr>
         </thead>
@@ -29,7 +29,7 @@ const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = 
           {tasks.map((task, index) => {
             const config = getStatusConfig(task.status);
             return (
-              <tr key={task.id}>
+              <tr key={task.id} onClick={() => onTaskClick(task)} style={{cursor: 'pointer'}}>
                 <td className="index-col">{index + 1}</td>
                 <td className="task-name-cell">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -37,6 +37,7 @@ const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = 
                       type="checkbox" 
                       style={{ cursor: 'pointer' }}
                       checked={task.status === 'done'} 
+                      onClick={(e) => e.stopPropagation()}
                       onChange={() => onUpdateStatus(task.id, task.status === 'done' ? 'todo' : 'done')}
                     />
                     <span style={{ color: task.status === 'done' ? '#666' : '#eee' }}>{task.title}</span>
@@ -58,8 +59,9 @@ const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = 
                         cursor: 'pointer',
                         zIndex: 2
                       }}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <option value="">Sorumlu Yok</option>
+                      <option value="">{t.noAssignee}</option>
                       {users.map(u => (
                         <option key={u.id} value={u.username}>{u.username}</option>
                       ))}
@@ -82,7 +84,7 @@ const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = 
                    <Flag size={14} color="#444" />
                 </td>
                 <td>
-                  <button className="row-action-btn" onClick={() => onDelete(task.id)} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer' }}>
+                  <button className="row-action-btn" onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer' }}>
                     <Trash2 size={14} />
                   </button>
                 </td>
@@ -93,7 +95,7 @@ const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = 
       </table>
       {tasks.length === 0 && (
         <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
-          Görev bulunamadı.
+          {t.noTasks}
         </div>
       )}
     </div>

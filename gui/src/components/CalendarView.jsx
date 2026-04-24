@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock } from 'lucide-react';
 
-const CalendarView = ({ tasks }) => {
+const CalendarView = ({ tasks, t }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
-  const monthNames = [
-    "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
-  ];
+  const monthNames = t.monthNames;
+  const dayNames = t.dayNames;
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -43,13 +41,13 @@ const CalendarView = ({ tasks }) => {
         </div>
         <div className="calendar-nav-btns">
           <button onClick={prevMonth}><ChevronLeft size={18} /></button>
-          <button className="today-btn" onClick={() => setCurrentDate(new Date())}>Bugün</button>
+          <button className="today-btn" onClick={() => setCurrentDate(new Date())}>{t.today}</button>
           <button onClick={nextMonth}><ChevronRight size={18} /></button>
         </div>
       </div>
 
       <div className="calendar-grid-v3">
-        {["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"].map(d => (
+        {dayNames.map(d => (
           <div key={d} className="calendar-weekday-v3">{d}</div>
         ))}
         {calendarDays.map((item, idx) => (

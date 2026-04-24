@@ -30,6 +30,8 @@ const NotificationSchema = new mongoose.Schema({
   taskId: String,
   taskTitle: String,
   createdBy: String,
+  recipient: { type: String, required: true, index: true },
+  read: { type: Boolean, default: false }
 }, { timestamps: true });
 
 const Notification = mongoose.model("Notification", NotificationSchema);
@@ -57,7 +59,7 @@ app.get("/health", (req, res) => {
 });
 
 app.post("/notifications", internalAuth, async (req, res) => {
-  const { message, taskId, taskTitle, createdBy } = req.body;
+  const { message, taskId, taskTitle, createdBy, recipient } = req.body;
 
   try {
     const notification = await Notification.create({
@@ -65,6 +67,7 @@ app.post("/notifications", internalAuth, async (req, res) => {
       taskId: taskId || null,
       taskTitle: taskTitle || null,
       createdBy: createdBy || null,
+      recipient: recipient || "broadcast"
     });
 
     return res.status(201).json({
@@ -79,7 +82,10 @@ app.post("/notifications", internalAuth, async (req, res) => {
 
 app.get("/notifications", async (req, res) => {
   try {
-    const notifications = await Notification.find()
+    const { recipient } = req.query;
+    const filter = recipient ? { recipient } : {};
+    
+    const notifications = await Notification.find(filter)
       .sort({ createdAt: -1 })
       .limit(50);
     res.status(200).json({

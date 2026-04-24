@@ -36,7 +36,8 @@ const Sidebar = ({
   taskFilter,
   onTaskFilterChange,
   onDeleteProject,
-  teams = []
+  teams = [],
+  t
 }) => {
   const [myTasksOpen, setMyTasksOpen] = useState(true);
 
@@ -66,12 +67,12 @@ const Sidebar = ({
       <aside className="sidebar-main">
         <div className="sidebar-main-header">
           <div className="team-name-row">
-            <span>Berkay Binici'nin Çalışma Alanı</span>
+            <span>{username}</span>
             <ChevronDown size={14} className="text-muted" />
           </div>
           <div className="create-btn-container">
              <button className="create-btn-large" onClick={() => window.dispatchEvent(new CustomEvent('open-task-modal'))}>
-                <Plus size={16} /> Oluştur
+                <Plus size={16} /> {t.create}
              </button>
           </div>
         </div>
@@ -80,24 +81,24 @@ const Sidebar = ({
           <div className="nav-section">
             <div className={`nav-row ${currentView === 'home' ? 'active' : ''}`} onClick={() => onViewChange('home')}>
               <div className="nav-row-content">
-                <Home size={16} /> <span>Ana Sayfa</span>
+                <Home size={16} /> <span>{t.home}</span>
               </div>
             </div>
             <div className="nav-row">
               <div className="nav-row-content">
-                <Inbox size={16} /> <span>Gelen Kutusu</span>
+                <Inbox size={16} /> <span>{t.inbox}</span>
               </div>
             </div>
             <div className="nav-row">
               <div className="nav-row-content">
-                <MessageSquare size={16} /> <span>Yanıtlar</span>
+                <MessageSquare size={16} /> <span>{t.replies}</span>
               </div>
             </div>
             
             <div className="nav-row" onClick={() => setMyTasksOpen(!myTasksOpen)}>
               <div className="nav-row-content">
                 {myTasksOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                <CheckSquare size={16} /> <span>Görevlerim</span>
+                <CheckSquare size={16} /> <span>{t.myTasks}</span>
               </div>
             </div>
             
@@ -106,13 +107,13 @@ const Sidebar = ({
                 <div className={`nav-row ${taskFilter === 'mine' ? 'active' : ''}`} onClick={() => onTaskFilterChange('mine')} style={{fontSize: '12px'}}>
                   <div className="nav-row-content">
                     <UserCircle size={14} className="text-muted" />
-                    <span>Bana Atananlar</span>
+                    <span>{t.assignedToMe}</span>
                   </div>
                 </div>
                 <div className={`nav-row ${taskFilter === 'all' && !currentProjectId ? 'active' : ''}`} onClick={() => { onProjectSelect(null); onTaskFilterChange('all'); }} style={{fontSize: '12px'}}>
                   <div className="nav-row-content">
                     <Layout size={14} className="text-muted" />
-                    <span>Tüm İşlerim</span>
+                    <span>{t.allMyTasks}</span>
                   </div>
                 </div>
               </div>
@@ -121,14 +122,14 @@ const Sidebar = ({
 
           <div className="nav-section">
             <div className="section-label">
-              <span>Ekipler</span>
+              <span>{t.teams}</span>
               <Plus size={14} cursor="pointer" onClick={() => window.dispatchEvent(new CustomEvent('open-team-modal'))} />
             </div>
             
             <div className={`nav-row ${!currentProjectId && currentView !== 'home' ? 'active' : ''}`} onClick={() => { onProjectSelect(null); onTaskFilterChange('all'); }}>
               <div className="nav-row-content">
                 <Users size={16} className="text-primary" />
-                <span>Tüm Ekipler</span>
+                <span>{t.allTeams}</span>
               </div>
             </div>
 
@@ -141,14 +142,14 @@ const Sidebar = ({
                  </div>
                ))}
                <div className="nav-row" style={{fontSize: '12px', color: 'var(--primary)', fontWeight: '600'}} onClick={() => window.dispatchEvent(new CustomEvent('open-team-modal'))}>
-                  <UserPlus size={14} /> <span>Ekip Oluştur / Üye Ekle</span>
+                  <UserPlus size={14} /> <span>{t.createTeam}</span>
                </div>
             </div>
           </div>
 
           <div className="nav-section" style={{marginTop: '16px'}}>
             <div className="section-label">
-              <span>Projeler</span>
+              <span>{t.projects}</span>
               <Plus size={14} cursor="pointer" onClick={() => window.dispatchEvent(new CustomEvent('open-project-modal'))} />
             </div>
 
@@ -173,7 +174,7 @@ const Sidebar = ({
             ))}
             
             <div className="nav-row" style={{fontSize: '12px', color: 'var(--text-muted)'}} onClick={() => window.dispatchEvent(new CustomEvent('open-project-modal'))}>
-               <Plus size={14} /> <span>Yeni Proje</span>
+               <Plus size={14} /> <span>{t.newProject}</span>
             </div>
           </div>
         </div>
@@ -182,12 +183,12 @@ const Sidebar = ({
           <div className="nav-row" onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}>
              <div className="nav-row-content">
                 <LogOut size={16} className="text-muted" />
-                <span>Çıkış Yap</span>
+                <span>{t.logout}</span>
              </div>
           </div>
           <div className="footer-btn-row" style={{display: 'flex', borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '8px'}}>
-             <div className="footer-icon-btn"><ArrowUpCircle size={16} /> Yükselt</div>
-             <div className="footer-icon-btn" onClick={() => window.dispatchEvent(new CustomEvent('open-team-modal'))}><UserPlus size={16} /> Davet Et</div>
+             <div className="footer-icon-btn"><ArrowUpCircle size={16} /> {t.upgrade}</div>
+             <div className="footer-icon-btn" onClick={() => window.dispatchEvent(new CustomEvent('open-team-modal'))}><UserPlus size={16} /> {t.invite}</div>
           </div>
         </div>
       </aside>

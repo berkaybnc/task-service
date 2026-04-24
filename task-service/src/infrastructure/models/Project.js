@@ -4,6 +4,7 @@ const ProjectSchema = new mongoose.Schema({
   title: { type: String, required: true },
   teamId: String,
   description: String,
+  ownerId: String,
   status: { type: String, default: "active" }
 }, { timestamps: true });
 
