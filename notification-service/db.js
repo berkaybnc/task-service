@@ -1,15 +1,20 @@
-const { Sequelize } = require("sequelize");
+const mongoose = require("mongoose");
 const logger = require("./logger");
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const MONGODB_URI = process.env.MONGODB_URI;
 
-if (!DATABASE_URL) {
-  throw new Error("DATABASE_URL environment variable is required");
+if (!MONGODB_URI) {
+  throw new Error("MONGODB_URI environment variable is required");
 }
 
-const sequelize = new Sequelize(DATABASE_URL, {
-  dialect: "postgres",
-  logging: (msg) => logger.debug(msg),
-});
+const connectDB = async () => {
+  try {
+    await mongoose.connect(MONGODB_URI);
+    logger.info("MongoDB connected (Notification Service)");
+  } catch (err) {
+    logger.error({ err }, "MongoDB connection failed");
+    process.exit(1);
+  }
+};
 
-module.exports = sequelize;
+module.exports = connectDB;

@@ -7,14 +7,15 @@ import {
   Plus, 
   MoreHorizontal,
   Calendar,
-  Circle
+  Circle,
+  Trash2
 } from 'lucide-react';
 
-const ListView = ({ tasks, onUpdateStatus, onDelete }) => {
+const ListView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = [] }) => {
   const [expandedGroups, setExpandedGroups] = useState({
     todo: true,
-    in_progress: true,
-    complete: true
+    doing: true,
+    done: true
   });
 
   const toggleGroup = (status) => {
@@ -22,15 +23,15 @@ const ListView = ({ tasks, onUpdateStatus, onDelete }) => {
   };
 
   const statusConfig = {
-    todo: { label: 'TO DO', color: '#888', iconColor: '#888' },
-    in_progress: { label: 'IN PROGRESS', color: '#2196f3', iconColor: '#2196f3' },
-    complete: { label: 'COMPLETE', color: '#4caf50', iconColor: '#4caf50' }
+    todo: { label: 'YAPILACAKLAR', color: '#888', iconColor: '#888' },
+    doing: { label: 'DEVAM EDİYOR', color: '#2196f3', iconColor: '#2196f3' },
+    done: { label: 'TAMAMLANDI', color: '#4caf50', iconColor: '#4caf50' }
   };
 
   const groupedTasks = {
-    in_progress: tasks.filter(t => t.status === 'in_progress'),
+    doing: tasks.filter(t => t.status === 'doing'),
     todo: tasks.filter(t => t.status === 'todo'),
-    complete: tasks.filter(t => t.status === 'complete')
+    done: tasks.filter(t => t.status === 'done')
   };
 
   const renderGroup = (status) => {
@@ -49,11 +50,11 @@ const ListView = ({ tasks, onUpdateStatus, onDelete }) => {
         {isExpanded && (
           <div className="group-content">
             <div className="list-table-header">
-              <div className="col-task">Name</div>
-              <div className="col-assignee">Assignee</div>
-              <div className="col-date">Due Date</div>
-              <div className="col-priority">Priority</div>
-              <div className="col-status-pill">Status</div>
+              <div className="col-task">Ad</div>
+              <div className="col-assignee">Sorumlu</div>
+              <div className="col-date">Teslim Tarihi</div>
+              <div className="col-priority">Öncelik</div>
+              <div className="col-status-pill">Durum</div>
               <div className="col-comments"></div>
             </div>
 
@@ -63,19 +64,41 @@ const ListView = ({ tasks, onUpdateStatus, onDelete }) => {
                   <Circle 
                     size={16} 
                     className="task-check-icon" 
-                    style={{ color: task.status === 'complete' ? '#4caf50' : '#444', cursor: 'pointer' }} 
+                    style={{ color: task.status === 'done' ? '#4caf50' : '#444', cursor: 'pointer' }} 
                     onClick={(e) => {
                       e.stopPropagation();
-                      onUpdateStatus(task.id, task.status === 'complete' ? 'todo' : 'complete');
+                      onUpdateStatus(task.id, task.status === 'done' ? 'todo' : 'done');
                     }}
                   />
-                  <span className="task-title" style={{ opacity: task.status === 'complete' ? 0.5 : 1 }}>
+                  <span className="task-title" style={{ opacity: task.status === 'done' ? 0.5 : 1 }}>
                     {task.title}
                   </span>
                 </div>
                 <div className="col-assignee">
-                  <div className="assignee-avatar-mini" style={{ width: '24px', height: '24px', fontSize: '10px' }}>
-                    {task.assigneeId ? task.assigneeId[0].toUpperCase() : '-'}
+                  <div className="assignee-select-wrapper" style={{ position: 'relative', width: '24px', height: '24px' }}>
+                    <select 
+                      className="list-assignee-select"
+                      value={task.assigneeId || ''}
+                      onChange={(e) => onUpdateAssignee(task.id || task._id, e.target.value)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        zIndex: 2
+                      }}
+                    >
+                      <option value="">Sorumlu Yok</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.username}>{u.username}</option>
+                      ))}
+                    </select>
+                    <div className="assignee-avatar-mini" style={{ width: '24px', height: '24px', fontSize: '10px', backgroundColor: task.assigneeId ? 'var(--primary)' : '#444', position: 'relative', zIndex: 1 }}>
+                      {task.assigneeId ? task.assigneeId[0].toUpperCase() : '-'}
+                    </div>
                   </div>
                 </div>
                 <div className="col-date">
@@ -90,15 +113,24 @@ const ListView = ({ tasks, onUpdateStatus, onDelete }) => {
                      {config.label}
                    </span>
                 </div>
-                <div className="col-comments">
+                <div className="col-comments" style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
                    <MessageSquare size={14} />
+                   <Trash2 
+                     size={14} 
+                     className="text-danger" 
+                     cursor="pointer" 
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       onDelete(task.id);
+                     }} 
+                   />
                 </div>
               </div>
             ))}
 
             <div className="add-task-btn-list" onClick={() => window.dispatchEvent(new CustomEvent('open-task-modal'))}>
               <Plus size={14} />
-              <span>Add Task</span>
+              <span>Görev Ekle</span>
             </div>
           </div>
         )}
@@ -108,9 +140,9 @@ const ListView = ({ tasks, onUpdateStatus, onDelete }) => {
 
   return (
     <div className="list-view-container">
-      {renderGroup('in_progress')}
+      {renderGroup('doing')}
       {renderGroup('todo')}
-      {renderGroup('complete')}
+      {renderGroup('done')}
     </div>
   );
 };

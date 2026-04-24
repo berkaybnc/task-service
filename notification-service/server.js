@@ -1,10 +1,10 @@
 const express = require("express");
 const cors = require("cors");
-const { DataTypes } = require("sequelize");
+const mongoose = require("mongoose");
 require("dotenv").config();
 
 const logger = require("./logger");
-const sequelize = require("./db");
+const connectDB = require("./db");
 const { metricsMiddleware, metricsHandler } = require("./metrics");
 
 const app = express();
@@ -25,34 +25,17 @@ const internalAuth = (req, res, next) => {
 };
 
 // Define Notification Model
-const Notification = sequelize.define("Notification", {
-  message: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-  },
-  taskId: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  taskTitle: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  createdBy: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-});
+const NotificationSchema = new mongoose.Schema({
+  message: { type: String, required: true },
+  taskId: String,
+  taskTitle: String,
+  createdBy: String,
+}, { timestamps: true });
 
-// Sync Database
-(async () => {
-  try {
-    await sequelize.sync();
-    logger.info("Notification Database synced");
-  } catch (err) {
-    logger.error({ err }, "Database sync failed");
-  }
-})();
+const Notification = mongoose.model("Notification", NotificationSchema);
+
+// Connect Database
+connectDB();
 
 app.use((req, res, next) => {
   logger.info({ method: req.method, url: req.url }, "request");
@@ -96,10 +79,9 @@ app.post("/notifications", internalAuth, async (req, res) => {
 
 app.get("/notifications", async (req, res) => {
   try {
-    const notifications = await Notification.findAll({
-      limit: 50,
-      order: [["createdAt", "DESC"]],
-    });
+    const notifications = await Notification.find()
+      .sort({ createdAt: -1 })
+      .limit(50);
     res.status(200).json({
       count: notifications.length,
       notifications,

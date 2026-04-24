@@ -1,12 +1,21 @@
-import { Sequelize } from "sequelize";
+import mongoose from "mongoose";
 import { env } from "../config/env.js";
 import pino from "pino";
 
 const logger = pino();
 
-const sequelize = new Sequelize(env.databaseUrl, {
-  dialect: "postgres",
-  logging: (msg) => logger.debug(msg),
-});
+const connectDB = async () => {
+  try {
+    if (!env.mongodbUri) {
+      throw new Error("MONGODB_URI is not defined");
+    }
+    await mongoose.connect(env.mongodbUri);
+    logger.info("MongoDB connected (Task Service)");
+  } catch (err) {
+    logger.error({ err }, "MongoDB connection failed");
+    process.exit(1);
+  }
+};
 
-export default sequelize;
+export default connectDB;
+export { mongoose };

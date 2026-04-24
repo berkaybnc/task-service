@@ -10,7 +10,7 @@ if (!MONGODB_URI) {
 const connectDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI);
-    logger.info("MongoDB connected successfully");
+    logger.info("MongoDB connected successfully (Task Service)");
   } catch (err) {
     logger.error("MongoDB connection error:", err);
     process.exit(1);

@@ -12,7 +12,7 @@ import { logger } from "./src/infrastructure/logger/logger.js";
 import { errorHandler } from "./src/api/middlewares/errorHandler.js";
 import { env } from "./src/config/env.js";
 import { metricsMiddleware, metricsHandler } from "./src/infrastructure/metrics.js";
-import sequelize from "./src/infrastructure/database.js";
+import connectDB from "./src/infrastructure/database.js";
 
 const app = express();
 
@@ -61,9 +61,8 @@ const isMain =
 if (isMain) {
   (async () => {
     try {
-      await sequelize.authenticate();
-      await sequelize.sync();
-      logger.info("Database connected and synced");
+      await connectDB();
+      logger.info("MongoDB connected successfully");
     } catch (err) {
       logger.error({ err }, "Database connection failed");
     }

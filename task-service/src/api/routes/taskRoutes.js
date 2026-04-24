@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { PostgresTaskRepository } from "../../infrastructure/persistence/PostgresTaskRepository.js";
-import { Task } from "../../domain/entities/Task.js";
+import { MongoTaskRepository } from "../../infrastructure/persistence/MongoTaskRepository.js";
 import { auth } from "../middlewares/auth.js";
 import axios from "axios";
 import axiosRetry from "axios-retry";
@@ -25,33 +24,32 @@ axiosRetry(notificationClient, {
 });
 
 export const taskRoutes = Router();
-const repo = new PostgresTaskRepository();
+const repo = new MongoTaskRepository();
 
 const ALL_TASKS_CACHE_KEY = "all_tasks";
 
 const createSchema = z.object({
   title: z.string().min(2),
   description: z.string().optional(),
-  status: z.enum(["todo", "doing", "done"]).optional(),
-  projectId: z.string().uuid().optional(),
+  status: z.string().optional(),
+  projectId: z.string().optional(),
   assigneeId: z.string().optional(),
+  dueDate: z.string().optional(),
 });
 
 const updateSchema = z.object({
   title: z.string().min(2).optional(),
   description: z.string().optional(),
-  status: z.enum(["todo", "doing", "done"]).optional(),
-  projectId: z.string().uuid().optional(),
+  status: z.string().optional(),
+  projectId: z.string().optional(),
   assigneeId: z.string().optional(),
+  dueDate: z.string().optional(),
 });
 
-// CREATE
 taskRoutes.post("/", auth, async (req, res) => {
   const body = createSchema.parse(req.body);
-  const entity = new Task({ ...body });
-  
   try {
-    const created = await repo.create(entity);
+    const created = await repo.create(body);
     
     // Invalidate Cache
     await cache.del(ALL_TASKS_CACHE_KEY);
@@ -77,17 +75,12 @@ taskRoutes.post("/", auth, async (req, res) => {
 });
 
 // LIST
-taskRoutes.get("/", async (req, res) => {
+taskRoutes.get("/", auth, async (req, res) => {
   try {
-    // Try Cache
-    const cached = await cache.get(ALL_TASKS_CACHE_KEY);
-    if (cached) {
-      logger.info("Serving tasks from Redis cache");
-      return res.json(cached);
-    }
-
-    const tasks = await repo.findAll();
-    await cache.set(ALL_TASKS_CACHE_KEY, tasks);
+    // Users can see all tasks, filtering will be handled by the frontend or by project/team membership in the future
+    const filter = {}; 
+    
+    const tasks = await repo.findAll(filter);
     res.json(tasks);
   } catch (err) {
     logger.error({ err }, "Failed to fetch tasks");
@@ -135,11 +128,30 @@ taskRoutes.patch("/:id", auth, async (req, res) => {
     const updated = await repo.update(req.params.id, patch);
     if (!updated) return res.status(404).json({ message: "Task not found" });
     
+    // Send notification if assignee changed
+    if (patch.assigneeId) {
+      try {
+        await notificationClient.post(`${env.NOTIFICATION_SERVICE_URL}/notifications`, {
+          message: `Task "${updated.title}" assigned to you`,
+          taskId: updated.id,
+          taskTitle: updated.title,
+          assignedTo: patch.assigneeId,
+          updatedBy: req.user?.username || "unknown",
+        });
+      } catch (err) {
+        logger.warn({ err: err.message }, "Notification failed for assignment");
+      }
+    }
+
     // Invalidate Cache
     await cache.del(ALL_TASKS_CACHE_KEY);
 
     res.json(updated);
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation failed", details: err.errors });
+    }
+    logger.error({ err }, "Failed to update task");
     res.status(500).json({ error: "Internal server error" });
   }
 });

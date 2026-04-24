@@ -1,12 +1,12 @@
 import React from 'react';
-import { MoreHorizontal, MessageSquare, Flag, Calendar } from 'lucide-react';
+import { Trash2, MessageSquare, Flag, Calendar } from 'lucide-react';
 
-const TableView = ({ tasks, onUpdateStatus, onDelete }) => {
+const TableView = ({ tasks, onUpdateStatus, onDelete, onUpdateAssignee, users = [] }) => {
   const getStatusConfig = (status) => {
     switch (status) {
-      case 'todo': return { label: 'TO DO', color: '#888' };
-      case 'in_progress': return { label: 'IN PROGRESS', color: '#2196f3' };
-      case 'complete': return { label: 'COMPLETE', color: '#4caf50' };
+      case 'todo': return { label: 'YAPILACAKLAR', color: '#888' };
+      case 'doing': return { label: 'DEVAM EDİYOR', color: '#2196f3' };
+      case 'done': return { label: 'TAMAMLANDI', color: '#4caf50' };
       default: return { label: status.toUpperCase(), color: '#666' };
     }
   };
@@ -17,11 +17,11 @@ const TableView = ({ tasks, onUpdateStatus, onDelete }) => {
         <thead>
           <tr>
             <th className="index-col">#</th>
-            <th>Name</th>
-            <th>Assignee</th>
-            <th>Status</th>
-            <th>Due Date</th>
-            <th>Priority</th>
+            <th>Ad</th>
+            <th>Sorumlu</th>
+            <th>Durum</th>
+            <th>Teslim Tarihi</th>
+            <th>Öncelik</th>
             <th style={{ width: '50px' }}></th>
           </tr>
         </thead>
@@ -36,15 +36,37 @@ const TableView = ({ tasks, onUpdateStatus, onDelete }) => {
                     <input 
                       type="checkbox" 
                       style={{ cursor: 'pointer' }}
-                      checked={task.status === 'complete'} 
-                      onChange={() => onUpdateStatus(task.id, task.status === 'complete' ? 'todo' : 'complete')}
+                      checked={task.status === 'done'} 
+                      onChange={() => onUpdateStatus(task.id, task.status === 'done' ? 'todo' : 'done')}
                     />
-                    <span style={{ color: task.status === 'complete' ? '#666' : '#eee' }}>{task.title}</span>
+                    <span style={{ color: task.status === 'done' ? '#666' : '#eee' }}>{task.title}</span>
                   </div>
                 </td>
                 <td>
-                  <div className="assignee-avatar-mini" style={{ width: '24px', height: '24px', fontSize: '10px' }}>
-                    {task.assigneeId ? task.assigneeId[0].toUpperCase() : '-'}
+                  <div className="assignee-select-wrapper" style={{ position: 'relative', width: '24px', height: '24px' }}>
+                    <select 
+                      className="table-assignee-select"
+                      value={task.assigneeId || ''}
+                      onChange={(e) => onUpdateAssignee(task.id || task._id, e.target.value)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        zIndex: 2
+                      }}
+                    >
+                      <option value="">Sorumlu Yok</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.username}>{u.username}</option>
+                      ))}
+                    </select>
+                    <div className="assignee-avatar-mini" style={{ width: '24px', height: '24px', fontSize: '10px', backgroundColor: task.assigneeId ? 'var(--primary)' : '#444', position: 'relative', zIndex: 1 }}>
+                      {task.assigneeId ? task.assigneeId[0].toUpperCase() : '-'}
+                    </div>
                   </div>
                 </td>
                 <td>
@@ -60,8 +82,8 @@ const TableView = ({ tasks, onUpdateStatus, onDelete }) => {
                    <Flag size={14} color="#444" />
                 </td>
                 <td>
-                  <button className="row-action-btn" onClick={() => onDelete(task.id)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}>
-                    <MoreHorizontal size={14} />
+                  <button className="row-action-btn" onClick={() => onDelete(task.id)} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer' }}>
+                    <Trash2 size={14} />
                   </button>
                 </td>
               </tr>
@@ -71,7 +93,7 @@ const TableView = ({ tasks, onUpdateStatus, onDelete }) => {
       </table>
       {tasks.length === 0 && (
         <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
-          No tasks found.
+          Görev bulunamadı.
         </div>
       )}
     </div>

@@ -2,11 +2,11 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-const { DataTypes } = require("sequelize");
+const mongoose = require("mongoose");
 require("dotenv").config();
 
 const logger = require("./logger");
-const sequelize = require("./db");
+const connectDB = require("./db");
 const { metricsMiddleware, metricsHandler } = require("./metrics");
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -19,86 +19,41 @@ app.use(cors());
 app.use(express.json());
 app.use(metricsMiddleware());
 
-// Define User Model
-const User = sequelize.define("User", {
-  username: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    unique: true,
-  },
-  firstName: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  lastName: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  email: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    unique: true,
-  },
-  phoneNumber: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  passwordHash: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  role: {
-    type: DataTypes.STRING,
-    defaultValue: "user",
-  },
-});
+// Define Mongoose Schemas
+const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  firstName: String,
+  lastName: String,
+  email: { type: String, unique: true, sparse: true },
+  phoneNumber: String,
+  passwordHash: { type: String, required: true },
+  role: { type: String, default: "user" },
+  teams: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Team' }]
+}, { timestamps: true });
 
-const Team = sequelize.define("Team", {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
-  },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-});
+const TeamSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+}, { timestamps: true });
 
-const UserTeam = sequelize.define("UserTeam", {
-  id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  }
-});
+const User = mongoose.model("User", UserSchema);
+const Team = mongoose.model("Team", TeamSchema);
 
-User.belongsToMany(Team, { through: UserTeam });
-Team.belongsToMany(User, { through: UserTeam });
-
-// Sync Database & Seed Initial Users
+// Connect to DB and Seed
 (async () => {
+  await connectDB();
   try {
-    await sequelize.sync({ alter: true });
-    logger.info("Auth Database synced with schema updates");
-    
-    // Seed admin if not exists
-    const adminCount = await User.count({ where: { username: "admin" } });
-    if (adminCount === 0) {
-      await User.create({
-        username: "admin",
-        passwordHash: bcrypt.hashSync("admin123", 10),
-        role: "admin",
-      });
-      await User.create({
-        username: "user",
-        passwordHash: bcrypt.hashSync("user123", 10),
-        role: "user",
-      });
-      logger.info("Default users seeded");
+    const adminExists = await User.findOne({ username: "admin" });
+    if (!adminExists) {
+      const adminHash = await bcrypt.hash("admin123", 10);
+      const userHash = await bcrypt.hash("user123", 10);
+      
+      await User.create({ username: "admin", passwordHash: adminHash, role: "admin" });
+      await User.create({ username: "user", passwordHash: userHash, role: "user" });
+      logger.info("Default users seeded in MongoDB");
     }
   } catch (err) {
-    logger.error({ err }, "Database sync failed");
+    logger.error("Seeding failed:", err);
   }
 })();
 
@@ -117,100 +72,47 @@ app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
     service: "auth-service",
-    database: "connected",
+    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
   });
 });
 
 app.post("/auth/register", async (req, res) => {
   const { username, password, email, phoneNumber, firstName, lastName } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ error: "Username and password are required" });
-  }
+  if (!username || !password) return res.status(400).json({ error: "Username and password are required" });
 
   try {
-    const existingUser = await User.findOne({ where: { username } });
-    if (existingUser) {
-      return res.status(409).json({ error: "Username already exists" });
-    }
-
-    if (email) {
-      const existingEmail = await User.findOne({ where: { email } });
-      if (existingEmail) {
-        return res.status(409).json({ error: "Email already exists" });
-      }
-    }
+    const existingUser = await User.findOne({ username });
+    if (existingUser) return res.status(409).json({ error: "Username already exists" });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const newUser = await User.create({
-      username,
-      passwordHash,
-      email,
-      phoneNumber,
-      firstName,
-      lastName,
-      role: "user"
-    });
+    const newUser = await User.create({ username, passwordHash, email, phoneNumber, firstName, lastName });
 
-    return res.status(201).json({
-      message: "User registered successfully",
-      user: {
-        id: newUser.id,
-        username: newUser.username,
-        email: newUser.email,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName
-      }
-    });
+    res.status(201).json({ message: "User registered successfully", user: { id: newUser._id, username: newUser.username } });
   } catch (err) {
     logger.error({ err }, "Registration error");
-    return res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 app.post("/auth/login", async (req, res) => {
   const { username, password } = req.body;
-
   try {
-    const foundUser = await User.findOne({ where: { username } });
-    const ok =
-      foundUser && password && (await bcrypt.compare(password, foundUser.passwordHash));
-
-    if (!ok) {
-      return res.status(401).json({
-        error: "Invalid username or password",
-      });
+    const foundUser = await User.findOne({ username });
+    if (!foundUser || !(await bcrypt.compare(password, foundUser.passwordHash))) {
+      return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    const token = jwt.sign(
-      {
-        username: foundUser.username,
-        role: foundUser.role,
-      },
-      JWT_SECRET,
-      { expiresIn: "1h" }
-    );
-
-    return res.status(200).json({
-      message: "Login successful",
-      token,
-      user: {
-        username: foundUser.username,
-        role: foundUser.role,
-        firstName: foundUser.firstName,
-        lastName: foundUser.lastName
-      },
-    });
+    const token = jwt.sign({ username: foundUser.username, role: foundUser.role }, JWT_SECRET, { expiresIn: "1h" });
+    res.status(200).json({ token, user: { username: foundUser.username, role: foundUser.role, firstName: foundUser.firstName } });
   } catch (err) {
     logger.error({ err }, "Login error");
-    return res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// TEAM & USER ENDPOINTS
 app.get("/users", async (req, res) => {
   try {
-    const users = await User.findAll({ attributes: ['id', 'username', 'email', 'firstName', 'lastName'] });
+    const users = await User.find({}, 'username email firstName lastName role');
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch users" });
@@ -219,7 +121,7 @@ app.get("/users", async (req, res) => {
 
 app.get("/teams", async (req, res) => {
   try {
-    const teams = await Team.findAll({ include: User });
+    const teams = await Team.find().populate('members', 'username');
     res.json(teams);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch teams" });
@@ -228,8 +130,7 @@ app.get("/teams", async (req, res) => {
 
 app.post("/teams", async (req, res) => {
   try {
-    const { name } = req.body;
-    const team = await Team.create({ name });
+    const team = await Team.create({ name: req.body.name });
     res.status(201).json(team);
   } catch (err) {
     res.status(500).json({ error: "Failed to create team" });
@@ -238,22 +139,33 @@ app.post("/teams", async (req, res) => {
 
 app.post("/teams/:id/members", async (req, res) => {
   try {
-    const { userId } = req.body;
-    const team = await Team.findByPk(req.params.id);
-    const user = await User.findByPk(userId);
-    if (!team || !user) return res.status(404).json({ error: "Team or User not found" });
+    const { userId, username } = req.body;
+    const team = await Team.findById(req.params.id);
     
-    await team.addUser(user);
+    let user;
+    if (userId) {
+      user = await User.findById(userId);
+    } else if (username) {
+      user = await User.findOne({ username });
+    }
+    if (!team || !user) return res.status(404).json({ error: "Team or User not found" });
+
+    if (!team.members.includes(user._id)) {
+      team.members.push(user._id);
+      await team.save();
+    }
+    if (!user.teams.includes(req.params.id)) {
+      user.teams.push(req.params.id);
+      await user.save();
+    }
     res.json({ message: "User added to team" });
   } catch (err) {
     res.status(500).json({ error: "Failed to add member" });
   }
 });
 
-module.exports = app;
-
 if (require.main === module) {
-  app.listen(PORT, () => {
-    logger.info({ port: PORT }, "Auth Service listening");
-  });
+  app.listen(PORT, () => logger.info({ port: PORT }, "Auth Service (MongoDB) listening"));
 }
+
+module.exports = app;

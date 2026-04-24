@@ -1,16 +1,12 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_MULTIPLE_DATABASES: auth_db,task_db,notification_db
+  mongodb:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
     volumes:
-      - ./infra/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-    expose:
-      - "5432"
+      - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d auth_db"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,10 +26,10 @@ services:
     environment:
       PORT: 3001
       JWT_SECRET: ${JWT_SECRET:-homework_secret}
-      DATABASE_URL: postgres://user:password@postgres:5432/auth_db
+      MONGODB_URI: mongodb://mongodb:27017/auth_db
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev_internal_secret_key}
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
     expose:
       - "3001"
@@ -48,10 +44,10 @@ services:
     build: ./notification-service
     environment:
       PORT: 3003
-      DATABASE_URL: postgres://user:password@postgres:5432/notification_db
+      MONGODB_URI: mongodb://mongodb:27017/notification_db
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev_internal_secret_key}
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
     expose:
       - "3003"
@@ -67,12 +63,12 @@ services:
     environment:
       PORT: 8080
       JWT_SECRET: ${JWT_SECRET:-homework_secret}
-      DATABASE_URL: postgres://user:password@postgres:5432/task_db
+      MONGODB_URI: mongodb://mongodb:27017/task_db
       REDIS_URL: redis://redis:6379
       NOTIFICATION_SERVICE_URL: http://notification-service:3003
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev_internal_secret_key}
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -88,9 +84,9 @@ services:
   api-gateway:
     build: ./api-gateway
     ports:
-      - "3000:3000"
+      - "5001:5001"
     environment:
-      PORT: 3000
+      PORT: 5001
       AUTH_SERVICE_URL: http://auth-service:3001
       TASK_SERVICE_URL: http://task-service:8080
       NOTIFICATION_SERVICE_URL: http://notification-service:3003
@@ -104,7 +100,7 @@ services:
       notification-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5001/health"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -135,3 +131,6 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+
+volumes:
+  mongodb_data:

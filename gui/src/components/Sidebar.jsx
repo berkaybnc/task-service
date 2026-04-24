@@ -22,30 +22,40 @@ import {
   UserPlus,
   ArrowUpCircle,
   Layout,
-  UserCircle
+  UserCircle,
+  Trash2
 } from 'lucide-react';
 
-const Sidebar = ({ username, teams, projects, currentView, onViewChange, currentProjectId, onProjectSelect }) => {
-  const [teamSpaceOpen, setTeamSpaceOpen] = useState(true);
+const Sidebar = ({ 
+  username, 
+  projects, 
+  currentView, 
+  onViewChange, 
+  currentProjectId,
+  onProjectSelect,
+  taskFilter,
+  onTaskFilterChange,
+  onDeleteProject,
+  teams = []
+}) => {
   const [myTasksOpen, setMyTasksOpen] = useState(true);
 
   return (
     <>
-      {/* 1. Slim Icon Sidebar */}
       <aside className="sidebar-slim">
         <div className="slim-logo">
            <div style={{width: '28px', height: '28px', background: 'linear-gradient(135deg, #ff00df, #7b68ee)', borderRadius: '8px'}}></div>
         </div>
         
-        <div className="slim-item active"><Home size={20} /></div>
-        <div className="slim-item"><Calendar size={20} /></div>
+        <div className={`slim-item ${currentView === 'home' ? 'active' : ''}`} onClick={() => onViewChange('home')}><Home size={20} /></div>
+        <div className={`slim-item ${currentView === 'calendar' ? 'active' : ''}`} onClick={() => onViewChange('calendar')}><Calendar size={20} /></div>
         <div className="slim-item"><Sparkles size={20} /></div>
         <div className="slim-item"><Users size={20} /></div>
         <div className="slim-item"><BarChart2 size={20} /></div>
-        <div className="slim-item"><Grid size={20} /></div>
+        <div className="slim-item" onClick={() => onViewChange('board')}><Grid size={20} /></div>
         
         <div style={{marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '16px'}}>
-          <div className="slim-item"><Plus size={20} /></div>
+          <div className="slim-item" onClick={() => window.dispatchEvent(new CustomEvent('open-task-modal'))}><Plus size={20} /></div>
           <div className="slim-item"><Bell size={20} /></div>
           <div className="user-avatar-tiny" style={{width: '32px', height: '32px', border: '2px solid #2b2b2b'}}>
              {username?.[0]?.toUpperCase() || 'U'}
@@ -53,76 +63,56 @@ const Sidebar = ({ username, teams, projects, currentView, onViewChange, current
         </div>
       </aside>
 
-      {/* 2. Main Sidebar Content */}
       <aside className="sidebar-main">
         <div className="sidebar-main-header">
           <div className="team-name-row">
-            <span>Berkay binici's Workspace</span>
+            <span>Berkay Binici'nin Çalışma Alanı</span>
             <ChevronDown size={14} className="text-muted" />
           </div>
           <div className="create-btn-container">
              <button className="create-btn-large" onClick={() => window.dispatchEvent(new CustomEvent('open-task-modal'))}>
-               <Plus size={16} /> Create
+                <Plus size={16} /> Oluştur
              </button>
           </div>
         </div>
 
         <div className="sidebar-scrollable">
-          {/* Home Section */}
           <div className="nav-section">
             <div className={`nav-row ${currentView === 'home' ? 'active' : ''}`} onClick={() => onViewChange('home')}>
               <div className="nav-row-content">
-                <Home size={16} /> <span>Home</span>
+                <Home size={16} /> <span>Ana Sayfa</span>
               </div>
             </div>
             <div className="nav-row">
               <div className="nav-row-content">
-                <Inbox size={16} /> <span>Inbox</span>
+                <Inbox size={16} /> <span>Gelen Kutusu</span>
               </div>
             </div>
             <div className="nav-row">
               <div className="nav-row-content">
-                <MessageSquare size={16} /> <span>Replies</span>
-              </div>
-            </div>
-            <div className="nav-row">
-              <div className="nav-row-content">
-                <MessageSquare size={16} /> <span>Assigned Comments</span>
+                <MessageSquare size={16} /> <span>Yanıtlar</span>
               </div>
             </div>
             
             <div className="nav-row" onClick={() => setMyTasksOpen(!myTasksOpen)}>
               <div className="nav-row-content">
                 {myTasksOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                <CheckSquare size={16} /> <span>My Tasks</span>
+                <CheckSquare size={16} /> <span>Görevlerim</span>
               </div>
             </div>
             
             {myTasksOpen && (
               <div className="nav-sub-items">
-                <div className="nav-row" style={{fontSize: '12px'}}>
+                <div className={`nav-row ${taskFilter === 'mine' ? 'active' : ''}`} onClick={() => onTaskFilterChange('mine')} style={{fontSize: '12px'}}>
                   <div className="nav-row-content">
                     <UserCircle size={14} className="text-muted" />
-                    <span>Assigned to me</span>
+                    <span>Bana Atananlar</span>
                   </div>
                 </div>
-                <div className="nav-row" style={{fontSize: '12px'}}>
+                <div className={`nav-row ${taskFilter === 'all' && !currentProjectId ? 'active' : ''}`} onClick={() => { onProjectSelect(null); onTaskFilterChange('all'); }} style={{fontSize: '12px'}}>
                   <div className="nav-row-content">
-                    <Calendar size={14} className="text-muted" />
-                    <span>Today & Overdue</span>
-                    <span className="badge-count" style={{marginLeft: 'auto'}}>1</span>
-                  </div>
-                </div>
-                <div className="nav-row" style={{fontSize: '12px'}}>
-                  <div className="nav-row-content">
-                    <Users size={14} className="text-muted" />
-                    <span>Personal List</span>
-                  </div>
-                </div>
-                <div className="nav-row" style={{fontSize: '12px'}}>
-                  <div className="nav-row-content">
-                    <MoreHorizontal size={14} className="text-muted" />
-                    <span>More</span>
+                    <Layout size={14} className="text-muted" />
+                    <span>Tüm İşlerim</span>
                   </div>
                 </div>
               </div>
@@ -131,93 +121,73 @@ const Sidebar = ({ username, teams, projects, currentView, onViewChange, current
 
           <div className="nav-section">
             <div className="section-label">
-              <span>Favorites</span>
-              <ChevronRight size={14} className="text-muted" />
-            </div>
-          </div>
-
-          {/* Spaces Section */}
-          <div className="nav-section">
-            <div className="section-label">
-              <span>Spaces</span>
+              <span>Ekipler</span>
               <Plus size={14} cursor="pointer" onClick={() => window.dispatchEvent(new CustomEvent('open-team-modal'))} />
             </div>
             
-            <div className="nav-row" onClick={() => setTeamSpaceOpen(!teamSpaceOpen)}>
+            <div className={`nav-row ${!currentProjectId && currentView !== 'home' ? 'active' : ''}`} onClick={() => { onProjectSelect(null); onTaskFilterChange('all'); }}>
               <div className="nav-row-content">
-                {teamSpaceOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 <Users size={16} className="text-primary" />
-                <span>All Tasks</span>
+                <span>Tüm Ekipler</span>
               </div>
             </div>
 
-            <div className="nav-row">
-              <div className="nav-row-content">
-                 <ChevronRight size={14} />
-                 <div style={{width: '12px', height: '12px', borderRadius: '3px', backgroundColor: 'var(--primary)'}}></div>
-                 <span>Team Space</span>
-              </div>
-              <MoreHorizontal size={14} className="text-muted nav-row-hover-only" />
-              <Plus size={14} className="text-muted nav-row-hover-only" />
-            </div>
-
-            {teamSpaceOpen && (
-              <div className="nav-sub-items" style={{paddingLeft: '24px'}}>
-                 {projects.map(proj => (
-                   <div 
-                     key={proj.id} 
-                     className={`nav-row ${currentProjectId === proj.id ? 'active' : ''}`}
-                     onClick={() => onProjectSelect(proj.id)}
-                     style={{fontSize: '13px'}}
-                   >
-                     <div className="nav-row-content">
-                       <Hash size={14} className="text-muted" />
-                       <span>{proj.title}</span>
-                     </div>
-                     <span className="badge-count" style={{marginLeft: 'auto'}}>{proj.taskCount || 3}</span>
+            <div className="nav-sub-items">
+               {teams.map(team => (
+                 <div key={team.id} className="nav-row" style={{fontSize: '12px', opacity: 0.8}} onClick={() => window.dispatchEvent(new CustomEvent('open-team-modal'))}>
+                   <div className="nav-row-content">
+                     <Users size={12} /> <span>{team.name}</span>
                    </div>
-                 ))}
-                 <div className="nav-row" style={{fontSize: '12px', color: 'var(--text-muted)'}}>
-                    <Plus size={14} /> <span>New Space</span>
                  </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="nav-section">
-            <div className="section-label">Channels</div>
-            <div className="nav-row">
-               <div className="nav-row-content">
-                 <Hash size={14} /> <span>Project 1</span>
+               ))}
+               <div className="nav-row" style={{fontSize: '12px', color: 'var(--primary)', fontWeight: '600'}} onClick={() => window.dispatchEvent(new CustomEvent('open-team-modal'))}>
+                  <UserPlus size={14} /> <span>Ekip Oluştur / Üye Ekle</span>
                </div>
             </div>
           </div>
 
-          <div className="nav-section">
-            <div className="section-label">Direct Messages</div>
-            <div className="nav-row">
-               <div className="nav-row-content">
-                 <div className="user-avatar-tiny" style={{width: '18px', height: '18px', fontSize: '10px'}}>B</div>
-                 <span>berkay binici</span>
-                 <span style={{fontSize: '10px', color: 'var(--text-muted)'}}>— You</span>
-               </div>
+          <div className="nav-section" style={{marginTop: '16px'}}>
+            <div className="section-label">
+              <span>Projeler</span>
+              <Plus size={14} cursor="pointer" onClick={() => window.dispatchEvent(new CustomEvent('open-project-modal'))} />
             </div>
-            <div className="nav-row" style={{fontSize: '12px', color: 'var(--text-muted)'}}>
-               <Plus size={14} /> <span>New message</span>
+
+            {projects.map(proj => (
+              <div 
+                key={proj.id} 
+                className={`nav-row project-row ${currentProjectId === proj.id ? 'active' : ''}`}
+                onClick={() => onProjectSelect(proj.id)}
+                style={{fontSize: '13px'}}
+              >
+                <div className="nav-row-content">
+                  <Hash size={14} className="text-muted" />
+                  <span>{proj.title}</span>
+                </div>
+                <Trash2 
+                  size={14} 
+                  className="nav-row-hover-only text-danger" 
+                  onClick={(e) => { e.stopPropagation(); onDeleteProject(proj.id); }}
+                  style={{cursor: 'pointer'}}
+                />
+              </div>
+            ))}
+            
+            <div className="nav-row" style={{fontSize: '12px', color: 'var(--text-muted)'}} onClick={() => window.dispatchEvent(new CustomEvent('open-project-modal'))}>
+               <Plus size={14} /> <span>Yeni Proje</span>
             </div>
           </div>
         </div>
 
         <div className="sidebar-footer-new">
-          <div className="nav-row" onClick={() => window.dispatchEvent(new CustomEvent('logout'))}>
+          <div className="nav-row" onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}>
              <div className="nav-row-content">
-               <div className="user-avatar-tiny" style={{width: '24px', height: '24px', fontSize: '11px'}}>{username?.[0] || 'B'}</div>
-               <span>{username}</span>
+                <LogOut size={16} className="text-muted" />
+                <span>Çıkış Yap</span>
              </div>
           </div>
           <div className="footer-btn-row" style={{display: 'flex', borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '8px'}}>
-             <div className="footer-icon-btn"><ArrowUpCircle size={16} /> Upgrade</div>
-             <div className="footer-icon-btn"><UserPlus size={16} /> Invite</div>
+             <div className="footer-icon-btn"><ArrowUpCircle size={16} /> Yükselt</div>
+             <div className="footer-icon-btn" onClick={() => window.dispatchEvent(new CustomEvent('open-team-modal'))}><UserPlus size={16} /> Davet Et</div>
           </div>
         </div>
       </aside>

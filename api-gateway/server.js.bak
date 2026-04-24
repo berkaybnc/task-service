@@ -16,10 +16,10 @@ axiosRetry(axios, {
     (error.response?.status >= 500 && error.response?.status < 600),
 });
 
-const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://auth-service:3001";
-const TASK_SERVICE_URL = process.env.TASK_SERVICE_URL || "http://task-service:8080";
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://127.0.0.1:3001";
+const TASK_SERVICE_URL = process.env.TASK_SERVICE_URL || "http://127.0.0.1:8080";
 const NOTIFICATION_SERVICE_URL =
-  process.env.NOTIFICATION_SERVICE_URL || "http://notification-service:3003";
+  process.env.NOTIFICATION_SERVICE_URL || "http://127.0.0.1:3003";
 const PORT = Number(process.env.PORT) || 5001;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || "";
@@ -29,7 +29,7 @@ app.set("trust proxy", 1);
 
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many login attempts, try again later" },
@@ -37,7 +37,7 @@ const loginLimiter = rateLimit({
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 1000,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) =>
@@ -78,6 +78,33 @@ app.get("/health", (req, res) => {
 
 const apiRouter = express.Router();
 
+// --- MOCK TEST MODE (For UI Verification) ---
+const MOCK_DATA = {
+  user: { username: "demo_user", role: "admin" },
+  projects: [{ id: "p1", title: "Örnek Proje", teamId: "t1" }],
+  teams: [{ id: "t1", name: "Geliştirme Ekibi", members: ["demo_user"] }],
+  tasks: [
+    { id: "1", title: "Gateway Testi", priority: "high", status: "todo", projectId: "p1", assigneeId: "demo_user" },
+    { id: "2", title: "UI Tasarımı Kontrolü", priority: "medium", status: "in_progress", projectId: "p1", assigneeId: "demo_user" }
+  ]
+};
+
+apiRouter.post("/auth/login", (req, res) => {
+  logger.info("Mock Login triggered");
+  res.json({ token: "mock-jwt-token", user: MOCK_DATA.user });
+});
+
+apiRouter.post("/auth/register", (req, res) => {
+  logger.info("Mock Register triggered");
+  res.status(201).json({ message: "Kayıt başarılı (Mock)" });
+});
+
+apiRouter.get("/projects", (req, res) => res.json(MOCK_DATA.projects));
+apiRouter.get("/teams", (req, res) => res.json(MOCK_DATA.teams));
+apiRouter.get("/tasks", (req, res) => res.json(MOCK_DATA.tasks));
+apiRouter.get("/users", (req, res) => res.json([MOCK_DATA.user]));
+// --- END MOCK TEST MODE ---
+
 apiRouter.post("/auth/login", loginLimiter, async (req, res) => {
   try {
     const response = await internalRequest.post(`${AUTH_SERVICE_URL}/auth/login`, req.body);
@@ -104,11 +131,54 @@ apiRouter.post("/auth/register", async (req, res) => {
   }
 });
 
+apiRouter.post("/ai/summarize", async (req, res) => {
+  const text = req.body?.text;
+  if (!text || typeof text !== "string") {
+    return res.status(400).json({ message: "Field 'text' (string) is required" });
+  }
+
+  if (!OPENAI_API_KEY) {
+    const preview = text.length > 120 ? `${text.slice(0, 120)}…` : text;
+    return res.json({
+      summary: `[mock] Summary: ${preview}`,
+      mock: true,
+    });
+  }
+
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: `Summarize the following text in 2-4 short sentences:\n\n${text}`,
+          },
+        ],
+        max_tokens: 256,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      logger.error({ status: r.status, data }, "OpenAI API error");
+      return res.status(502).json({ message: "OpenAI request failed", detail: data });
+    }
+    const summary = data.choices?.[0]?.message?.content?.trim() || "";
+    return res.json({ summary, mock: false });
+  } catch (err) {
+    logger.error({ err }, "OpenAI call failed");
+    return res.status(502).json({ message: "OpenAI call failed" });
+  }
+});
+
 apiRouter.get("/tasks", async (req, res) => {
   try {
-    const response = await internalRequest.get(`${TASK_SERVICE_URL}/tasks`, {
-      headers: { Authorization: req.headers.authorization || "" }
-    });
+    const response = await internalRequest.get(`${TASK_SERVICE_URL}/tasks`);
     return res.status(response.status).json(response.data);
   } catch (error) {
     if (error.response) {
@@ -116,6 +186,19 @@ apiRouter.get("/tasks", async (req, res) => {
     }
     logger.error({ err: error }, "gateway task list forwarding error");
     return res.status(500).json({ message: "Gateway task list forwarding error" });
+  }
+});
+
+apiRouter.get("/tasks/:id", async (req, res) => {
+  try {
+    const response = await internalRequest.get(`${TASK_SERVICE_URL}/tasks/${req.params.id}`);
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    logger.error({ err: error }, "gateway task detail forwarding error");
+    return res.status(500).json({ message: "Gateway task detail forwarding error" });
   }
 });
 
@@ -257,12 +340,13 @@ apiRouter.get("/notifications", async (req, res) => {
   }
 });
 
+
 app.use("/api", apiRouter);
+
+module.exports = app;
 
 if (require.main === module) {
   app.listen(PORT, () => {
     logger.info({ port: PORT }, "API Gateway listening");
   });
 }
-
-module.exports = app;
