@@ -4,6 +4,8 @@ const cors = require("cors");
 const axios = require("axios");
 const axiosRetry = require("axios-retry").default;
 const rateLimit = require("express-rate-limit");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const logger = require("./logger");
 const { metricsMiddleware, metricsHandler } = require("./metrics");
@@ -63,6 +65,53 @@ const internalRequest = axios.create({
   headers: {
     "X-Internal-API-Key": INTERNAL_API_KEY,
   },
+});
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+const userSockets = new Map();
+
+io.on("connection", (socket) => {
+  socket.on("identify", (username) => {
+    userSockets.set(username, socket.id);
+    logger.info({ username, socketId: socket.id }, "User identified for WebSockets");
+  });
+
+  socket.on("disconnect", () => {
+    for (const [username, id] of userSockets.entries()) {
+      if (id === socket.id) {
+        userSockets.delete(username);
+        break;
+      }
+    }
+  });
+});
+
+// Broadcast endpoint for internal services
+app.post("/internal/broadcast", (req, res) => {
+  const apiKey = req.headers["x-internal-api-key"];
+  if (INTERNAL_API_KEY && apiKey !== INTERNAL_API_KEY) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  const { targetUser, event, data } = req.body;
+  if (targetUser) {
+    const socketId = userSockets.get(targetUser);
+    if (socketId) {
+      io.to(socketId).emit(event, data);
+      logger.info({ targetUser, event }, "Direct message sent via WS");
+    }
+  } else {
+    io.emit(event, data);
+    logger.info({ event }, "Broadcast message sent via WS");
+  }
+  res.json({ success: true });
 });
 
 app.get("/metrics", (req, res, next) => {
@@ -220,7 +269,9 @@ apiRouter.post("/teams/:id/members", async (req, res) => {
 
 apiRouter.get("/projects", async (req, res) => {
   try {
-    const response = await internalRequest.get(`${TASK_SERVICE_URL}/tasks/projects`);
+    const response = await internalRequest.get(`${TASK_SERVICE_URL}/tasks/projects`, {
+      headers: { Authorization: req.headers.authorization || "" }
+    });
     res.status(response.status).json(response.data);
   } catch (error) {
     if (error.response) {
@@ -246,7 +297,10 @@ apiRouter.post("/projects", async (req, res) => {
 
 apiRouter.get("/notifications", async (req, res) => {
   try {
-    const response = await internalRequest.get(`${NOTIFICATION_SERVICE_URL}/notifications`);
+    const { recipient } = req.query;
+    const response = await internalRequest.get(`${NOTIFICATION_SERVICE_URL}/notifications`, {
+      params: { recipient }
+    });
     return res.status(response.status).json(response.data);
   } catch (error) {
     if (error.response) {
@@ -257,11 +311,119 @@ apiRouter.get("/notifications", async (req, res) => {
   }
 });
 
+apiRouter.post("/tasks/:id/comments", async (req, res) => {
+  try {
+    const response = await internalRequest.post(`${TASK_SERVICE_URL}/tasks/${req.params.id}/comments`, req.body, {
+      headers: { Authorization: req.headers.authorization || "" }
+    });
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    return res.status(500).json({ message: "Gateway comment create error" });
+  }
+});
+
+apiRouter.get("/tasks/:id/comments", async (req, res) => {
+  try {
+    const response = await internalRequest.get(`${TASK_SERVICE_URL}/tasks/${req.params.id}/comments`, {
+      headers: { Authorization: req.headers.authorization || "" }
+    });
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    return res.status(500).json({ message: "Gateway comment fetch error" });
+  }
+});
+
+// ─── ATTACHMENTS ────────────────────────────────────────────
+
+// LIST ekleri
+apiRouter.get("/tasks/:id/attachments", async (req, res) => {
+  try {
+    const response = await internalRequest.get(
+      `${TASK_SERVICE_URL}/tasks/${req.params.id}/attachments`,
+      { headers: { Authorization: req.headers.authorization || "" } }
+    );
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) return res.status(error.response.status).json(error.response.data);
+    logger.error({ err: error }, "gateway attachment list error");
+    return res.status(500).json({ message: "Gateway attachment list error" });
+  }
+});
+
+// UPLOAD — multipart/form-data stream'i olduğu gibi task-service'e ilet
+apiRouter.post("/tasks/:id/attachments", express.raw({ type: "*/*", limit: "12mb" }), async (req, res) => {
+  try {
+    const response = await internalRequest.post(
+      `${TASK_SERVICE_URL}/tasks/${req.params.id}/attachments`,
+      req.body,
+      {
+        headers: {
+          Authorization:  req.headers.authorization || "",
+          "Content-Type": req.headers["content-type"] || "multipart/form-data",
+        },
+        responseType: "json",
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) return res.status(error.response.status).json(error.response.data);
+    logger.error({ err: error }, "gateway attachment upload error");
+    return res.status(500).json({ message: "Gateway attachment upload error" });
+  }
+});
+
+// DOWNLOAD — binary stream
+apiRouter.get("/tasks/:id/attachments/:attachmentId", async (req, res) => {
+  try {
+    const response = await internalRequest.get(
+      `${TASK_SERVICE_URL}/tasks/${req.params.id}/attachments/${req.params.attachmentId}`,
+      {
+        headers: { Authorization: req.headers.authorization || "" },
+        responseType: "arraybuffer",
+      }
+    );
+    res.set("Content-Type",        response.headers["content-type"]);
+    res.set("Content-Disposition", response.headers["content-disposition"]);
+    res.set("Content-Length",      response.headers["content-length"]);
+    return res.status(response.status).send(response.data);
+  } catch (error) {
+    if (error.response) return res.status(error.response.status).json(error.response.data);
+    logger.error({ err: error }, "gateway attachment download error");
+    return res.status(500).json({ message: "Gateway attachment download error" });
+  }
+});
+
+// DELETE ek
+apiRouter.delete("/tasks/:id/attachments/:attachmentId", async (req, res) => {
+  try {
+    const response = await internalRequest.delete(
+      `${TASK_SERVICE_URL}/tasks/${req.params.id}/attachments/${req.params.attachmentId}`,
+      { headers: { Authorization: req.headers.authorization || "" } }
+    );
+    return res.status(response.status).send(response.data);
+  } catch (error) {
+    if (error.response) return res.status(error.response.status).json(error.response.data);
+    logger.error({ err: error }, "gateway attachment delete error");
+    return res.status(500).json({ message: "Gateway attachment delete error" });
+  }
+});
+
+
+
+
 app.use("/api", apiRouter);
 
 if (require.main === module) {
-  app.listen(PORT, () => {
-    logger.info({ port: PORT }, "API Gateway listening");
+  server.listen(PORT, () => {
+    logger.info({ port: PORT }, "API Gateway listening with WebSockets");
   });
 }
 
