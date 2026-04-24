@@ -41,8 +41,8 @@ const Team = mongoose.model("Team", TeamSchema);
 
 // Connect to DB and Seed
 (async () => {
-  await connectDB();
   try {
+    await connectDB();
     const adminExists = await User.findOne({ username: "admin" });
     if (!adminExists) {
       const adminHash = await bcrypt.hash("admin123", 10);
@@ -53,9 +53,21 @@ const Team = mongoose.model("Team", TeamSchema);
       logger.info("Default users seeded in MongoDB");
     }
   } catch (err) {
-    logger.error("Seeding failed:", err);
+    logger.warn({ err: err.message }, "DB connection/seeding skipped (test or no MONGODB_URI)");
   }
 })();
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
 
 app.use((req, res, next) => {
   logger.info({ method: req.method, url: req.url }, "request");
@@ -102,7 +114,7 @@ app.post("/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    const token = jwt.sign({ username: foundUser.username, role: foundUser.role }, JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ id: foundUser._id, username: foundUser.username, role: foundUser.role }, JWT_SECRET, { expiresIn: "1h" });
     res.status(200).json({ token, user: { username: foundUser.username, role: foundUser.role, firstName: foundUser.firstName } });
   } catch (err) {
     logger.error({ err }, "Login error");
@@ -119,18 +131,23 @@ app.get("/users", async (req, res) => {
   }
 });
 
-app.get("/teams", async (req, res) => {
+app.get("/teams", authenticateToken, async (req, res) => {
   try {
-    const teams = await Team.find().populate('members', 'username');
+    const teams = await Team.find({ members: req.user.id }).populate('members', 'username');
     res.json(teams);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch teams" });
   }
 });
 
-app.post("/teams", async (req, res) => {
+app.post("/teams", authenticateToken, async (req, res) => {
   try {
-    const team = await Team.create({ name: req.body.name });
+    const team = await Team.create({ 
+      name: req.body.name,
+      members: [req.user.id]
+    });
+    // Also update the user's teams list
+    await User.findByIdAndUpdate(req.user.id, { $push: { teams: team._id } });
     res.status(201).json(team);
   } catch (err) {
     res.status(500).json({ error: "Failed to create team" });
